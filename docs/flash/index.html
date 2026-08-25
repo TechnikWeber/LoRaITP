@@ -54,11 +54,12 @@ No toolchain, no downloads.</p>
 </div>
 
 <div class=board>
-  <h2>Seeed XIAO nRF52840</h2>
-  <p>No WiFi, no camera — a low-power relay or a pocket receiver.
-  Flashing is drag-and-drop and needs no special browser: double-tap the
-  reset button, a USB drive appears, copy the file onto it.</p>
-  <p><a href="loraitp-xiao_nrf52840.uf2" download>Download the .uf2</a></p>
+  <h2>Seeed XIAO nRF52840 <em>— not yet</em></h2>
+  <p>The protocol itself compiles for this part, but the firmware around
+  it does not: it is built on WiFi, NVS and a filesystem the nRF52840
+  does not have. Making it work means writing a different application —
+  images off over USB or BLE, no access point — rather than adding a few
+  conditionals. It is on the list, not in this build.</p>
 </div>
 
 <h2>After flashing</h2>
