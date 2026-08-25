@@ -425,10 +425,22 @@ void loop(void)
         return;
     }
 
-    if (cfg.role == LORAITP_ROLE_SENDER)
+    if (cfg.role == LORAITP_ROLE_SENDER) {
         run_sender(ctx);
-    else
-        run_receiver(ctx);
+        next_run_ms = millis()
+                      + (cfg.interval_s ? cfg.interval_s * 1000u : 60000u);
+        return;
+    }
 
-    next_run_ms = millis() + (cfg.interval_s ? cfg.interval_s * 1000u : 60000u);
+    run_receiver(ctx);
+
+    /*
+     * A receiver goes straight back to listening. The interval is the
+     * sender's business: applying it here would leave the radio deaf for
+     * five minutes out of every fifteen, and since the two ends have no
+     * common clock the gap would land wherever it liked. Most transfers
+     * would simply be missed, and the symptom - "sometimes it works" - is
+     * about the worst one to have to diagnose over a 30 km link.
+     */
+    next_run_ms = millis();
 }

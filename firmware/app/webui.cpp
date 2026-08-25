@@ -500,6 +500,9 @@ static void h_settings_get(void)
          "loss, not 25%.</small>";
     h += "<label>Interval between transfers, seconds <input name=iv size=8 value=";
     h += g_cfg->interval_s; h += "></label>";
+    h += "<small>Sender only. A receiver listens continuously — pausing it "
+         "between windows would make it deaf for part of every cycle, and "
+         "with no shared clock the gap would land wherever it liked.</small>";
     h += "<label>Byte budget per image <input name=budget size=8 value=";
     h += g_cfg->image_budget; h += "></label>";
     h += "<label>Keep how many images <input name=keep size=6 value=";
