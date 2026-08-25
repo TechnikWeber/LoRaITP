@@ -51,7 +51,15 @@ test_port: vectors/vectors.h
 port: test_port
 	./test_port
 
-clean:
-	rm -f test_core test_core_san test_port *.o ../src/*.o ../port/*.o
+# The image store, against real files in a temporary directory. Written
+# on stdio so the same code runs over LittleFS on the target.
+test_store: ../port/loraitp_store.c test_store.c
+	$(CC) $(CFLAGS) -I../port ../port/loraitp_store.c test_store.c -o $@
 
-.PHONY: all run san port clean
+store: test_store
+	./test_store
+
+clean:
+	rm -f test_core test_core_san test_port test_store *.o ../src/*.o ../port/*.o
+
+.PHONY: all run san port store clean

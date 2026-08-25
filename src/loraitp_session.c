@@ -261,6 +261,12 @@ int loraitp_send_image(loraitp_ctx_t *c, const loraitp_image_desc_t *desc,
     m->block = c->cfg.block_size;
     memcpy(m->nonce, c->nonce, 4);
 
+    if (p->image_begin != NULL) {
+        rc = p->image_begin(p->ctx, m->img_len, false);
+        if (rc != LORAITP_OK)
+            return rc;
+    }
+
     uint16_t n_chunks = loraitp_meta_n_chunks(m);
     if (c->cfg.parity_percent) {
         uint16_t k = (n_chunks < m->block) ? n_chunks : m->block;
@@ -337,6 +343,8 @@ int loraitp_send_image(loraitp_ctx_t *c, const loraitp_image_desc_t *desc,
                                            c->txbuf, sizeof(c->txbuf));
             transmit(c, (size_t)fl, 0);
         }
+        if (p->image_end != NULL)
+            p->image_end(p->ctx, true);
         if (out) *out = c->stats;
         return LORAITP_OK;
     }
@@ -420,6 +428,8 @@ int loraitp_send_image(loraitp_ctx_t *c, const loraitp_image_desc_t *desc,
     rc = LORAITP_OK;
     if (t == LORAITP_FINACK && rl >= 3 && c->rxbuf[2] != 0)
         rc = LORAITP_E_IO;
+    if (p->image_end != NULL)
+        p->image_end(p->ctx, rc == LORAITP_OK);
     if (out) *out = c->stats;
     return rc;
 }
@@ -613,6 +623,12 @@ int loraitp_receive_image(loraitp_ctx_t *c, loraitp_image_desc_t *out_desc,
                 memcpy(c->nonce, nm.nonce, 4);
                 c->stats.chunks_total = loraitp_meta_n_chunks(&nm);
                 c->stats.chunks_have = 0;
+                if (p->image_begin != NULL
+                    && p->image_begin(p->ctx, nm.img_len, true)
+                       != LORAITP_OK) {
+                    c->have_meta = false;   /* no store, no transfer */
+                    continue;
+                }
                 c->saw_any = false;
                 c->max_ordinal = 0;
                 reset_block(c, 0);
@@ -740,6 +756,8 @@ int loraitp_receive_image(loraitp_ctx_t *c, loraitp_image_desc_t *out_desc,
     }
 
 done:
+    if (p->image_end != NULL && c->have_meta)
+        p->image_end(p->ctx, result == LORAITP_RX_COMPLETE);
     if (out_desc) {
         out_desc->img_id = c->meta.img_id;
         out_desc->layer = c->meta.layer;

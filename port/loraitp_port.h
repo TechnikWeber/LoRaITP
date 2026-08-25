@@ -112,6 +112,23 @@ typedef struct loraitp_port {
                        uint16_t len);
 
     /*
+     * Optional lifecycle hooks, both NULL if the application opens and
+     * closes the image itself.
+     *
+     * A filesystem needs to know the length before the first write - it
+     * has a file to create and, on LittleFS, to preallocate, because
+     * seeking past the end of a file there does not leave zeros. The core
+     * only learns the length from META, so it has to pass it on. Without
+     * this the receiver cannot use a file-backed store at all, which is
+     * how the gap was found.
+     *
+     * image_begin is called once the length is known and before any
+     * image_read or image_write; image_end after the last one.
+     */
+    int (*image_begin)(void *ctx, uint32_t img_len, bool for_write);
+    int (*image_end)(void *ctx, bool complete);
+
+    /*
      * Single AES-128 block encryption, used to build CMAC. Leave NULL
      * to compile without authentication. Every platform we target has
      * this in hardware; there is no software fallback in the core on

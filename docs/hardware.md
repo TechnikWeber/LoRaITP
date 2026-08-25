@@ -10,9 +10,9 @@
 | Python reference + channel simulator | 68 checks, 12 scenarios |
 | Portable C core | 81 checks, warning-free, sanitizer-clean |
 | `port_sim.c` — in-memory radio for tests | done |
-| **`port_*_sx126x.c` — a real radio driver** | **not written** |
+| `port_radiolib.cpp` — SX1262 on ESP32 and nRF52840 | written, 19 contract checks; never built against real RadioLib |
+| `loraitp_store.c` — LittleFS image store | written, 37 checks against real files |
 | **Camera capture and JPEG encode** | **not written** |
-| **LittleFS storage** | **not written** |
 | **WiFi AP and web UI** | **not written** |
 | **Application: schedule, sleep, board pin maps** | **not written** |
 
@@ -72,32 +72,68 @@ That solves the problem I raised in [camera.md](camera.md) — wire the
 radio to a camera board rather than a camera to a radio board — because
 Seeed already did the hard half.
 
-### The catch, and it matters before you order
+### The catch, and it is worse than a connector clash
 
-**The camera and the "XIAO ESP32S3 & Wio-SX1262 Kit" use the same B2B
-connector.** You cannot stack both. The Kit's radio board and the Sense's
-camera board compete for one socket.
+**The camera and the "XIAO ESP32S3 & Wio-SX1262 Kit" collide at the GPIO
+level, not just at the socket.** The Kit's B2B wiring is:
+
+| Signal | GPIO | What else uses it on a Sense |
+|---|---|---|
+| NSS | 41 | PDM microphone data |
+| RESET | 42 | PDM microphone clock |
+| BUSY | 40 | **camera DVP** |
+| DIO1 | 39 | **camera DVP** |
+| RF switch | 38 | **camera DVP** |
+
+Three of the five are camera data lines. No amount of rewiring saves
+that combination.
+
+**The good news, and it corrects an earlier worry in this file:** the
+Sense camera does not touch a single *edge* pin. Its DVP bus lives on
+GPIO 10–18, 38, 39, 40, 47 and 48, all of which reach the B2B connector
+and nowhere else. Every one of D0..D10 is free for the radio.
+
+So the fix is simply to wire the radio to the edge pins instead — with
+the non-Kit board, or with jumper leads. SPI at a few megahertz over
+flying leads is entirely reasonable engineering. (The camera would not
+be: 20 MHz parallel. Which is precisely why it stays on the B2B where it
+belongs.)
 
 Seeed sells two different boards under the name *Wio-SX1262 for XIAO*:
 
 * the **Kit** version, which connects over the B2B connector — this is
-  the one Meshtastic and RNode support, and the one that clashes with the
-  camera;
+  the one Meshtastic and RNode support, and the one that cannot coexist
+  with the camera;
 * the **non-Kit** version, which connects over ordinary soldered pin
-  headers, and therefore leaves the B2B connector free for the camera.
-  It uses different pins for the radio.
+  headers, and therefore leaves the B2B connector free.
 
 So the camera node is:
 
 > **XIAO ESP32S3 Sense** (camera on the B2B connector)
-> **+ Wio-SX1262 for XIAO, the non-Kit version** (radio on the edge pins)
+> **+ Wio-SX1262 wired to the edge pins** — the non-Kit board, or the Kit
+> board reached with jumper leads
 
-The XIAO exposes 11 GPIOs on its edge; an SX1262 needs about seven
-(SCK, MOSI, MISO, NSS, RST, BUSY, DIO1). That fits, with a little room
-left over — but **confirm the free-pin list against the Sense's own
-pinout before ordering**, because the Sense's B2B already claims the
-camera bus, the SD SPI and the microphone, and some of those signals also
-appear on edge pins.
+The assignment in
+[`firmware/boards/xiao_esp32s3_sense.h`](../firmware/boards/xiao_esp32s3_sense.h):
+
+| Signal | XIAO pin | GPIO | Note |
+|---|---|---|---|
+| SCK | D8 | 7 | SPI bus, shared with the Sense SD card |
+| MISO | D9 | 8 | " |
+| MOSI | D10 | 9 | " |
+| NSS | D1 | 2 | |
+| RST | D3 | 4 | |
+| BUSY | D4 | 5 | |
+| DIO1 | D0 | 1 | any S3 GPIO can raise an interrupt |
+
+That leaves D5 free for an RF-switch line if the module needs one, D6/D7
+for the serial console, and D11/D12 for the microphone. Comfortable, not
+a squeeze.
+
+Sharing the SPI bus with the SD card is normal — SPI is a bus and the two
+devices have different chip selects. We do not use the SD card, but if one
+is fitted, its CS on GPIO3 must be driven high or it will drive MISO and
+corrupt every radio read.
 
 If you would rather keep everything on a Heltec, the alternative is an
 **ArduCam Mini 2MP Plus**, an OV2640 behind an SPI interface — about six
@@ -173,16 +209,17 @@ infrastructure to run.
 
 ## What has to be built, in order
 
-1. **`port_radiolib.cpp`** plus pin maps. Until this exists nothing runs
-   on hardware.
-2. **A loopback on the bench** — two boards, `EU868_G4_LP` (5 mW, no duty
-   cycle, see [duty-cycle.md](duty-cycle.md)), a fixed test image from
-   flash. This is the profile to develop against: it burns no budget and
-   needs no licence.
-3. **LittleFS storage** behind `image_read` / `image_write`.
-4. **Camera and software JPEG** on the XIAO Sense.
-5. **Application** — schedule, deep sleep, button, AP.
-6. **Web flasher and CI.**
+1. ~~`port_radiolib.cpp` plus pin maps~~ — done.
+2. ~~LittleFS storage behind `image_read` / `image_write`~~ — done.
+3. **The first build against the real RadioLib and Arduino core**, and
+   the XIAO radio pin numbers confirmed against the module you have.
+4. **A loopback on the bench** — `firmware/node/main.cpp` is written:
+   two boards, `EU868_G4_LP` (5 mW, no duty cycle), a synthetic image
+   from flash. This is the profile to develop against; it burns no budget
+   and needs no licence, so a hundred transfers cost an afternoon.
+5. **Camera and software JPEG** on the XIAO Sense.
+6. **Application** — schedule, deep sleep, button, AP.
+7. **Web flasher and CI.**
 
-Step 2 is the one that turns this from a protocol into a project, and it
-needs nothing but step 1 and two boards on a desk.
+Step 4 is the one that turns this from a protocol into a project, and it
+needs nothing but step 3 and two boards on a desk.

@@ -108,6 +108,7 @@ $ python3 sim/run.py          # 12 full transfers against simulated loss
 $ cd tests && make run        # 81 checks on the C core
 $ cd tests && make san        # the same, under ASan and UBSan
 $ cd tests && make port       # 19 checks on the RadioLib adapter
+$ cd tests && make store      # 37 checks on the image store, real files
 ```
 
 No dependencies, no hardware, no waiting — a transfer that takes four
@@ -124,6 +125,7 @@ sim/             Python reference implementation + channel simulator
 src/             portable C core   <- no platform headers, no malloc
 port/            platform shims    <- no protocol logic
 firmware/        boards/ (pin maps), node/ (sender), base/ (receiver)
+port/            radio (RadioLib) and storage (LittleFS) shims
 tests/           core against the simulator, on the host
 ```
 
@@ -199,7 +201,9 @@ than a new core.
 - [ ] Bench loopback on `EU868_G4_LP` (5 mW, no duty cycle: no budget
       burnt, no licence needed) — `firmware/node/main.cpp` is written and
       has never been run
-- [ ] LittleFS storage, camera pipeline, WiFi AP
+- [x] LittleFS image store — ring buffer, sidecar statistics, recovery
+      from an interrupted transfer
+- [ ] Camera pipeline and WiFi AP
 - [ ] Web flasher on GitHub Pages (WebSerial for the ESP32s, UF2 for the
       nRF52840)
 - [ ] Camera and image pipeline: grayscale capture, software JPEG with
