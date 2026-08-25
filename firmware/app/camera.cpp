@@ -117,9 +117,17 @@ int loraitp_camera_capture_jpeg(size_t budget, uint16_t restart_interval,
     int n = -1;
     if (fb->format == PIXFORMAT_GRAYSCALE
         && fb->len >= (size_t)fb->width * fb->height) {
+        /*
+         * Zero means "one marker per row of blocks", derived from the
+         * frame we actually got rather than from what the caller assumed
+         * the sensor would return. A hard-coded interval computed from an
+         * expected width is wrong the moment the frame size changes.
+         */
+        uint16_t dri = restart_interval ? restart_interval
+                                        : (uint16_t)(fb->width / 8);
         n = loraitp_jpeg_encode_to_budget(fb->buf, (uint16_t)fb->width,
                                           (uint16_t)fb->height, budget,
-                                          restart_interval, out, cap,
+                                          dri, out, cap,
                                           &quality);
         if (info != NULL) {
             info->width = (uint16_t)fb->width;

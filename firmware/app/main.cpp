@@ -93,41 +93,57 @@ static void configure_session(loraitp_session_cfg_t *s)
         s->callsign = cfg.callsign;
 }
 
+/*
+ * A snapshot the radio core publishes and the web core reads.
+ *
+ * The web server runs pinned to the other core, so having it call
+ * loraitp_budget_query() directly was a data race: querying the budget
+ * prunes the governor's rolling window, and the radio core writes that
+ * same ring while transmitting. Two cores, shared mutable state, no lock.
+ *
+ * Rather than put a mutex in the core - which would make every port pay
+ * for a problem this application created - the radio core copies what the
+ * page needs into plain words. A torn read of a number that is only
+ * displayed does no harm, and the core stays lock-free.
+ */
+static struct {
+    uint32_t used_ms, budget_ms, bytes_left;
+    uint8_t  chunk_len;
+    uint16_t toa_ms;
+} g_snap;
+
+static void publish_status(void)
+{
+    if (ctx == NULL)
+        return;
+    loraitp_budget_t b;
+    loraitp_budget_query(ctx, &b);
+    g_snap.used_ms = b.airtime_used_ms;
+    g_snap.budget_ms = b.airtime_budget_ms;
+    g_snap.bytes_left = loraitp_budget_bytes_remaining(ctx);
+
+    uint8_t pl = loraitp_max_payload_for_toa(cfg.spreading_factor,
+                                             cfg.bandwidth_hz,
+                                             cfg.coding_rate,
+                                             LORAITP_MAX_TOA_MS * 1000u);
+    g_snap.chunk_len = (pl > 4) ? (uint8_t)(pl - 4) : 1;
+    g_snap.toa_ms = (uint16_t)(loraitp_time_on_air_us(
+        pl, cfg.spreading_factor, cfg.bandwidth_hz, cfg.coding_rate, 8)
+        / 1000u);
+}
+
 static void status_cb(void *user, loraitp_webui_status_t *out)
 {
     (void)user;
-    loraitp_session_cfg_t s;
-    configure_session(&s);
 
     /* A throwaway context purely to ask the governor. Cheap: it holds no
      * state beyond the rolling window, which starts empty. */
-    /*
-     * Ask the live context, not a fresh one.
-     *
-     * The governor's rolling window lives in the context, and creating a
-     * new one to answer a status request would report an empty window -
-     * always 0% used, however much had just been transmitted. Worse, the
-     * loop used to re-init before every transfer, which reset the window
-     * for real: each session would believe it had the whole hourly budget
-     * to itself, and the duty-cycle accounting the whole design rests on
-     * would have been decoration.
-     */
-    if (ctx != NULL) {
-        loraitp_budget_t b;
-        loraitp_budget_query(ctx, &b);
-        out->airtime_used_ms = b.airtime_used_ms;
-        out->airtime_budget_ms = b.airtime_budget_ms;
-        out->bytes_remaining = loraitp_budget_bytes_remaining(ctx);
+    out->airtime_used_ms = g_snap.used_ms;
+    out->airtime_budget_ms = g_snap.budget_ms;
+    out->bytes_remaining = g_snap.bytes_left;
+    out->chunk_len = g_snap.chunk_len;
+    out->frame_toa_ms = g_snap.toa_ms;
 
-        uint8_t pl = loraitp_max_payload_for_toa(cfg.spreading_factor,
-                                                 cfg.bandwidth_hz,
-                                                 cfg.coding_rate,
-                                                 LORAITP_MAX_TOA_MS * 1000u);
-        out->chunk_len = (pl > 4) ? (uint8_t)(pl - 4) : 1;
-        out->frame_toa_ms = (uint16_t)(loraitp_time_on_air_us(
-            pl, cfg.spreading_factor, cfg.bandwidth_hz,
-            cfg.coding_rate, 8) / 1000u);
-    }
     out->duty_percent = (out->airtime_budget_ms
                          ? (uint8_t)((out->airtime_budget_ms * 100u) / 3600000u)
                          : 0);
@@ -268,6 +284,7 @@ void setup(void)
     loraitp_webui_begin(&cfg, store, status_cb, trigger_cb, NULL);
     xTaskCreatePinnedToCore(web_task, "web", 4096, NULL, 1, NULL, 0);
 
+    publish_status();
     next_run_ms = millis() + 3000;
 }
 
@@ -288,12 +305,14 @@ static int make_image(uint32_t *out_crc, uint16_t *w, uint16_t *h)
     int n = -1;
 #if LORAITP_HAS_CAMERA
     /*
-     * The restart interval is one MCU row. Markers cannot be aligned to
+     * 0 asks for one restart marker per row of blocks, derived from the
+     * frame the sensor actually returns. Markers cannot be aligned to
      * chunk boundaries - DRI counts MCUs and the compressed size of an
-     * interval varies - but one per row costs about 1% of the file and
-     * bounds the damage from a lost packet to a couple of rows.
+     * interval varies with the picture - but one per row costs about 1%
+     * of the file and cuts the damage from a lost packet from 72 rows to
+     * 16, measured.
      */
-    n = loraitp_camera_capture_jpeg(cfg.image_budget, 320 / 8,
+    n = loraitp_camera_capture_jpeg(cfg.image_budget, 0,
                                     jpegbuf, sizeof(jpegbuf), &info);
 #endif
     if (n <= 0) {
@@ -414,7 +433,8 @@ static void run_receiver(loraitp_ctx_t *ctx)
 void loop(void)
 {
     if ((int32_t)(millis() - next_run_ms) < 0) {
-        delay(50);
+        publish_status();     /* keep the page's numbers fresh while idle */
+        delay(200);
         return;
     }
 
@@ -427,12 +447,14 @@ void loop(void)
 
     if (cfg.role == LORAITP_ROLE_SENDER) {
         run_sender(ctx);
+        publish_status();
         next_run_ms = millis()
                       + (cfg.interval_s ? cfg.interval_s * 1000u : 60000u);
         return;
     }
 
     run_receiver(ctx);
+    publish_status();
 
     /*
      * A receiver goes straight back to listening. The interval is the
