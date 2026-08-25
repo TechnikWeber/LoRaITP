@@ -135,8 +135,20 @@ class Meta:
         return (self.n_chunks + self.block - 1) // self.block
 
     def block_k(self, blk):
-        """Source chunks in block `blk` - the last one is usually short."""
-        return min(self.block, self.n_chunks - blk * self.block)
+        """
+        Source chunks in block `blk` - the last one is usually short, and
+        a block past the end of the image has none.
+
+        The clamp at zero matters: without it a block index beyond the
+        image returns a negative count, which propagates into
+        frame_ordinal() and corrupts the receiver's idea of how far the
+        transmission has got. A forged or corrupted SEQ is enough to
+        trigger it. Found by the C core disagreeing with this file.
+        """
+        remaining = self.n_chunks - blk * self.block
+        if remaining <= 0:
+            return 0
+        return min(self.block, remaining)
 
     @property
     def total_frames(self):

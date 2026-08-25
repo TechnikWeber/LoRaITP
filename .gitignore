@@ -18,3 +18,7 @@ captures/
 .vscode/
 .idea/
 .DS_Store
+
+# compiled test binaries
+tests/test_core
+tests/test_core_san

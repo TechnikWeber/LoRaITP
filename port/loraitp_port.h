@@ -51,6 +51,14 @@ typedef struct {
 #define LORAITP_E_IO       (-3)
 #define LORAITP_E_ARG      (-4)
 #define LORAITP_E_NOSUP    (-5)
+/* Regulatory refusals. These are configuration errors, not runtime
+ * conditions: the station must not transmit until they are fixed. */
+#define LORAITP_E_CALLSIGN  (-6)
+#define LORAITP_E_CRYPTO    (-7)
+#define LORAITP_E_FREQ      (-8)
+#define LORAITP_E_POWER     (-9)
+#define LORAITP_E_BANDWIDTH (-10)
+#define LORAITP_E_STATE     (-11)
 
 typedef struct loraitp_port {
     /*

@@ -15,6 +15,27 @@ airtime. Keeping the core free of platform dependencies means the exact
 same object code runs under `sim/` against injected packet loss, at
 whatever speed you like.
 
+## Status
+
+Built and tested. 81 checks pass on the host under
+`-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion` with no
+warnings, and clean under AddressSanitizer and UBSan:
+
+```console
+$ cd tests && make run      # 81 passed, 0 failed
+$ cd tests && make san      # same, under ASan + UBSan
+```
+
+`sizeof(loraitp_ctx_t)` is **3872 bytes**. The core allocates nothing;
+erasure coding uses scratch the caller supplies and sizes with
+`loraitp_fec_session_scratch()`.
+
+The vectors in `tests/vectors/` are generated from the Python reference
+by `tests/gen_vectors.py`, so the two implementations cannot drift apart
+without a test failing. Time on air agrees with `tools/airtime.py` to
+within 1 microsecond across 34 vectors, and every frame encodes
+byte-for-byte identically.
+
 ## Layout
 
 | File | Contents |
@@ -25,6 +46,6 @@ whatever speed you like.
 | `loraitp_session.c` | sender and receiver state machines |
 | `loraitp_governor.c` | duty-cycle accounting and the regional profile table |
 | `loraitp_bitmap.c` | STAT bitmap / list encoding |
-| `loraitp_fec.c` | Reed-Solomon over GF(256), erasure decoding |
+| `loraitp_fec.c` | Reed-Solomon over GF(256) with a Cauchy generator |
 | `loraitp_mac.c` | AES-128-CMAC over the port's block cipher |
 | `loraitp_crc.c` | CRC-32 for the image checksum |

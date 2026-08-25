@@ -73,6 +73,11 @@ typedef enum {
 
 /* --------------------------------------------------------- session */
 
+/* Config flags */
+#define LORAITP_CFG_ENCRYPTED (1u << 0)   /* refused in amateur mode */
+#define LORAITP_CFG_MAC_DATA  (1u << 1)   /* authenticate bulk frames too */
+#define LORAITP_CFG_PROBE     (1u << 2)   /* measure the link, pick an SF */
+
 typedef struct {
     loraitp_mode_t   mode;
     loraitp_region_t region;
@@ -80,21 +85,33 @@ typedef struct {
     uint32_t frequency_hz;
     uint8_t  spreading_factor;   /* 0 = probe and choose automatically */
     uint32_t bandwidth_hz;
+    uint8_t  coding_rate;        /* 1..4 -> 4/5 .. 4/8 */
     int8_t   tx_power_dbm;
 
     uint8_t  chunk_len;          /* 0 = derive from LORAITP_MAX_TOA_MS */
+    uint16_t block_size;         /* 0 = LORAITP_BLOCK_SIZE */
     uint8_t  parity_percent;     /* broadcast mode; 0 in interactive */
 
-    /* Authentication. Ignored when key_present is false. */
-    bool     key_present;
+    uint32_t flags;
+
+    /* Authentication. Ignored when the port has no AES block function. */
     uint8_t  key[16];
-    bool     mac_data_frames;    /* MAC bulk frames too; costs 2% airtime */
 
     /* Amateur service. Required when region == LORAITP_REG_AMATEUR. */
     const char *callsign;
     uint16_t ident_interval_s;   /* 0 = default 540 */
 
     uint32_t session_timeout_ms;
+    uint8_t  max_rounds;         /* 0 = 8 */
+    uint8_t  eob_retry;          /* 0 = 3 */
+
+    /*
+     * Scratch for erasure coding, supplied by the caller so the core
+     * allocates nothing. Required in broadcast mode, ignored otherwise.
+     * loraitp_fec_scratch_needed() sizes it.
+     */
+    uint8_t *fec_scratch;
+    size_t   fec_scratch_len;
 } loraitp_session_cfg_t;
 
 typedef struct {
@@ -111,12 +128,21 @@ typedef struct {
 } loraitp_image_desc_t;
 
 typedef struct {
-    uint16_t chunks_sent, chunks_received, chunks_missing;
-    uint16_t rounds;
+    uint32_t frames_tx, frames_rx;
+    uint32_t retransmits;
+    uint32_t mac_rejects;     /* frames discarded by the MAC check */
     uint32_t airtime_ms;
+    uint16_t rounds;
+    uint16_t chunks_have, chunks_total;
+    uint16_t blocks_lost;     /* blocks that could not be reconstructed */
     int16_t  last_rssi_dbm;
     int8_t   last_snr_qdb;
 } loraitp_stats_t;
+
+/* Scratch needed for erasure coding a block of k source and r parity
+ * chunks. Supplied by the caller so the core allocates nothing. */
+size_t loraitp_fec_session_scratch(uint16_t k, uint16_t r,
+                                   uint16_t chunk_len);
 
 /* Opaque; size is fixed at compile time, allocate it yourself. */
 typedef struct loraitp_ctx loraitp_ctx_t;
@@ -183,18 +209,59 @@ typedef struct {
     uint32_t airtime_today_ms;
 } loraitp_budget_t;
 
-void loraitp_budget_query(const loraitp_ctx_t *ctx, loraitp_budget_t *out);
+/* Pruning the rolling window mutates it, so this is not const. */
+void loraitp_budget_query(loraitp_ctx_t *ctx, loraitp_budget_t *out);
 
 /*
  * How many image bytes the remaining budget allows at the current
  * settings. Lets an application decide "send the thumbnail only today".
  */
-uint32_t loraitp_budget_bytes_remaining(const loraitp_ctx_t *ctx);
+uint32_t loraitp_budget_bytes_remaining(loraitp_ctx_t *ctx);
 
 /* Time on air in microseconds. Mirrors tools/airtime.py exactly. */
 uint32_t loraitp_time_on_air_us(uint8_t payload_len, uint8_t sf,
                                 uint32_t bw_hz, uint8_t cr,
                                 uint8_t preamble_symbols);
+
+/* Largest payload whose time on air stays within toa_us. */
+uint8_t loraitp_max_payload_for_toa(uint8_t sf, uint32_t bw_hz, uint8_t cr,
+                                    uint32_t toa_us);
+
+/* Fastest spreading factor with `margin_qdb` quarter-dB to spare. */
+uint8_t loraitp_choose_sf(int16_t snr_qdb, int16_t margin_qdb);
+
+/* -------------------------------------------------------------- CRC-32 */
+
+uint32_t loraitp_crc32(const uint8_t *buf, size_t len);
+uint32_t loraitp_crc32_update(uint32_t crc, const uint8_t *buf, size_t len);
+
+/* --------------------------------------------------- erasure coding */
+
+size_t loraitp_fec_scratch(uint16_t k);
+int loraitp_fec_encode(const uint8_t *data, uint16_t k, uint16_t chunk_len,
+                       uint8_t *parity, uint16_t r);
+int loraitp_fec_decode(uint8_t *chunks, const uint8_t *present, uint16_t k,
+                       uint16_t r, uint16_t chunk_len, uint8_t *scratch,
+                       size_t scratch_len, uint8_t *workspace);
+
+/* -------------------------------------------------- authentication */
+
+int  loraitp_cmac(const loraitp_port_t *port, const uint8_t *nonce,
+                  size_t nonce_len, const uint8_t *msg, size_t msg_len,
+                  uint8_t *out, size_t out_len);
+bool loraitp_frame_is_authenticated(int ftype, bool mac_data);
+int  loraitp_seal(const loraitp_port_t *port, const uint8_t *nonce,
+                  bool mac_data, uint8_t *buf, size_t len, size_t cap);
+int  loraitp_unseal(const loraitp_port_t *port, const uint8_t *nonce,
+                    bool mac_data, const uint8_t *buf, size_t len);
+
+/* ------------------------------------------------- STAT body coding */
+
+int loraitp_stat_choose_enc(const uint16_t *missing, uint16_t n_missing,
+                            uint16_t base);
+int loraitp_stat_encode_body(int enc, const uint16_t *missing,
+                             uint16_t n_missing, uint16_t base,
+                             uint8_t *out, size_t cap);
 
 #ifdef __cplusplus
 }

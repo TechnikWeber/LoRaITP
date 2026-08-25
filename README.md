@@ -11,10 +11,12 @@ away, and a regulatory airtime budget measured in seconds per hour.
 It runs directly on the LoRa PHY — no LoRaWAN, no network server, no
 gateway. A sender and a receiver that agree on a frequency are enough.
 
-> **Status: design phase.** The specification is complete, every timing
-> number in it is computed rather than estimated, and a Python reference
-> implementation runs full transfers against a simulated channel. No
-> firmware yet. See [the roadmap](#roadmap).
+> **Status: the protocol works, the radio has not been switched on yet.**
+> The specification is complete and every number in it is computed rather
+> than estimated. A Python reference implementation runs full transfers
+> against a simulated channel, and a portable C core passes 81 checks
+> against vectors generated from it. Firmware is next.
+> See [the roadmap](#roadmap).
 
 ---
 
@@ -103,6 +105,8 @@ Full details in **[SPEC.md](SPEC.md)**.
 $ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
                               # governor rules, feasibility property tests
 $ python3 sim/run.py          # 12 full transfers against simulated loss
+$ cd tests && make run        # 81 checks on the C core
+$ cd tests && make san        # the same, under ASan and UBSan
 ```
 
 No dependencies, no hardware, no waiting — a transfer that takes four
@@ -178,7 +182,8 @@ image.
 - [x] Repository skeleton and the core/port boundary
 - [x] Python reference implementation and channel simulator — 68 checks,
       12 transfer scenarios, no hardware
-- [ ] Portable C implementation of the core state machine
+- [x] Portable C core — 81 checks, warning-free, sanitizer-clean,
+      3.9 kB of context and no allocation
 - [ ] ESP32-S3 / SX1262 sender firmware
 - [ ] Receiver + image reassembly on Linux
 - [ ] Camera and image pipeline: grayscale capture, software JPEG with
@@ -187,11 +192,13 @@ image.
 
 ## Prior art
 
-[`pmanzoni/loractp`](https://github.com/pmanzoni/loractp) is a TCP-like
-chunked transfer protocol for LoRa and is worth reading. LoRaITP differs
-in aiming specifically at images rather than arbitrary files, in
-treating the regulatory budget as a first-class protocol component, and
-in making partial delivery produce a usable picture.
+No single mechanism here is new, and [`docs/prior-art.md`](docs/prior-art.md)
+says so in detail, claim by claim.
+[`pmanzoni/loractp`](https://github.com/pmanzoni/loractp) is the nearest
+neighbour and worth reading. What seems genuinely unusual is treating the
+regulatory budget as a normative part of the protocol rather than the
+operator's problem — everything else is a careful application of
+well-understood ideas.
 
 ## Contributing
 

@@ -474,8 +474,15 @@ def receiver(cfg, clock, listen_ms=None, stats=None):
             asm.max_ordinal = max(asm.max_ordinal,
                                   frame_ordinal(m, fr.seq, fr.is_parity))
             if fr.is_parity:
-                asm.par[(fr.seq // m.n_parity, fr.seq % m.n_parity)] = fr.payload
+                if not m.n_parity:
+                    continue
+                blk, idx = divmod(fr.seq, m.n_parity)
+                if blk >= m.n_blocks:
+                    continue          # out of range: corrupted or forged
+                asm.par[(blk, idx)] = fr.payload
             else:
+                if fr.seq >= m.n_chunks:
+                    continue
                 asm.src[fr.seq] = fr.payload
             if cfg.mode == MODE_BROADCAST:
                 # Early completion: stop listening the moment the image is
