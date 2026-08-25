@@ -35,8 +35,19 @@ typedef struct {
 typedef void (*loraitp_webui_status_cb)(void *user,
                                         loraitp_webui_status_t *out);
 
+/*
+ * Run the next transfer immediately instead of waiting for the schedule.
+ *
+ * Standing next to two boards during a first bring-up and waiting five
+ * minutes for the timer is not debugging, it is loitering - and the
+ * interval that makes sense in the field is exactly the one that makes
+ * testing unbearable.
+ */
+typedef void (*loraitp_webui_trigger_cb)(void *user);
+
 void loraitp_webui_begin(loraitp_appcfg_t *cfg, loraitp_store_t *store,
-                         loraitp_webui_status_cb cb, void *user);
+                         loraitp_webui_status_cb cb,
+                         loraitp_webui_trigger_cb trigger, void *user);
 void loraitp_webui_stop(void);
 bool loraitp_webui_running(void);
 

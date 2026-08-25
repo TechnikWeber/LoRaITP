@@ -30,6 +30,7 @@ static bool      g_dns_running;
 static loraitp_appcfg_t *g_cfg;
 static loraitp_store_t *g_store;
 static loraitp_webui_status_cb g_status_cb;
+static loraitp_webui_trigger_cb g_trigger_cb;
 static void *g_status_user;
 static uint32_t g_last_activity;
 static bool g_running;
@@ -64,6 +65,7 @@ th{white-space:nowrap;opacity:.75;font-weight:400}
   margin-top:.2rem}
 .bar>i{display:block;height:100%;background:currentColor}
 label{display:inline-flex;align-items:center;gap:.3rem;margin-right:1rem}
+button{font:inherit;padding:.35rem .9rem;margin-right:.5rem}
 </style>
 <h1>LoRaITP <span id=hdr></span></h1>
 <nav><a id=t_gallery onclick="show('gallery')">Images</a
@@ -71,6 +73,9 @@ label{display:inline-flex;align-items:center;gap:.3rem;margin-right:1rem}
 ><a id=t_log onclick="show('log_v')">Live log</a
 ><a href="/settings">Settings</a></nav>
 
+<p><button onclick="go()">Send / listen now</button>
+<button onclick="if(confirm('Reboot the board?'))fetch('/api/reboot')">Reboot</button>
+<span id=msg></span></p>
 <div id=gallery><div class=grid id=grid></div></div>
 <div id=status hidden><table id=stat></table></div>
 <div id=log_v hidden>
@@ -89,6 +94,12 @@ function show(id){
     document.getElementById('t_'+s).className=
       ((s==='log'?'log_v':s)===id)?'on':'';
   if(id==='log_v') pollLog();
+}
+async function go(){
+  await fetch('/api/trigger');
+  document.getElementById('msg').textContent=' starting…';
+  setTimeout(()=>{document.getElementById('msg').textContent='';},3000);
+  show('log_v');
 }
 function fmt(ms){const s=Math.round(ms/1000);
   return s<90?s+' s':s<5400?(s/60).toFixed(1)+' min':(s/3600).toFixed(1)+' h';}
@@ -271,6 +282,23 @@ static void h_log(void)
     out += ",\"level\":";  out += loraitp_log_level();
     out += "}";
     g_server.send(200, "application/json", out);
+}
+
+static void h_trigger(void)
+{
+    touch();
+    if (g_trigger_cb)
+        g_trigger_cb(g_status_user);
+    LOG("transfer triggered from the web page");
+    g_server.send(200, "text/plain", "ok");
+}
+
+static void h_reboot(void)
+{
+    touch();
+    g_server.send(200, "text/plain", "rebooting");
+    delay(200);
+    ESP.restart();
 }
 
 static void h_file(const char *ext, const char *mime)
@@ -553,11 +581,13 @@ static void h_settings_post(void)
 /* ------------------------------------------------------------- public */
 
 void loraitp_webui_begin(loraitp_appcfg_t *cfg, loraitp_store_t *store,
-                         loraitp_webui_status_cb cb, void *user)
+                         loraitp_webui_status_cb cb,
+                         loraitp_webui_trigger_cb trigger, void *user)
 {
     g_cfg = cfg;
     g_store = store;
     g_status_cb = cb;
+    g_trigger_cb = trigger;
     g_status_user = user;
 
     if (!cfg->ap_enabled)
@@ -583,6 +613,8 @@ void loraitp_webui_begin(loraitp_appcfg_t *cfg, loraitp_store_t *store,
     g_server.on("/api/list", h_list);
     g_server.on("/api/status", h_status);
     g_server.on("/api/log", h_log);
+    g_server.on("/api/trigger", h_trigger);
+    g_server.on("/api/reboot", h_reboot);
     g_server.on("/img", h_img);
     g_server.on("/meta", h_meta);
     g_server.on("/settings", HTTP_GET, h_settings_get);

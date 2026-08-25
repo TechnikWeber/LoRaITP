@@ -118,8 +118,6 @@ static void status_cb(void *user, loraitp_webui_status_t *out)
             pl, cfg.spreading_factor, cfg.bandwidth_hz,
             cfg.coding_rate, 8) / 1000u);
     }
-    const loraitp_region_info_t *ri = NULL;
-    (void)ri;
     out->duty_percent = (out->airtime_budget_ms
                          ? (uint8_t)((out->airtime_budget_ms * 100u) / 3600000u)
                          : 0);
@@ -136,6 +134,12 @@ static void status_cb(void *user, loraitp_webui_status_t *out)
     out->camera = camera_state;
     out->board = LORAITP_BOARD.name;
     out->version = LORAITP_APP_VERSION;
+}
+
+static void trigger_cb(void *user)
+{
+    (void)user;
+    next_run_ms = millis();      /* the loop picks this up on its next pass */
 }
 
 /*
@@ -228,7 +232,7 @@ void setup(void)
         }
     }
 
-    loraitp_webui_begin(&cfg, store, status_cb, NULL);
+    loraitp_webui_begin(&cfg, store, status_cb, trigger_cb, NULL);
     xTaskCreatePinnedToCore(web_task, "web", 4096, NULL, 1, NULL, 0);
 
     next_run_ms = millis() + 3000;
