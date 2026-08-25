@@ -59,7 +59,16 @@ test_store: ../port/loraitp_store.c test_store.c
 store: test_store
 	./test_store
 
-clean:
-	rm -f test_core test_core_san test_port test_store *.o ../src/*.o ../port/*.o
+# The JPEG encoder. Structural checks in C; the real verification is
+# verify_jpeg.py, which decodes the output with an independent decoder.
+test_jpeg: ../firmware/app/jpeg.c test_jpeg.c
+	$(CC) $(CFLAGS) -I../firmware/app ../firmware/app/jpeg.c test_jpeg.c \
+	  -o $@ -lm
 
-.PHONY: all run san port store clean
+jpeg: test_jpeg
+	./test_jpeg
+
+clean:
+	rm -f test_core test_core_san test_port test_store test_jpeg *.o ../src/*.o ../port/*.o
+
+.PHONY: all run san port store jpeg clean

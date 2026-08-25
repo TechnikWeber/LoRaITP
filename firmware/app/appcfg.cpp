@@ -1,0 +1,102 @@
+#include <Preferences.h>
+#include <string.h>
+
+#include "appcfg.h"
+#include "loraitp.h"
+
+static const char *NS = "loraitp";
+
+void loraitp_cfg_defaults(loraitp_appcfg_t *c, bool board_has_camera)
+{
+    memset(c, 0, sizeof(*c));
+
+    /* A board with a camera is a sender; one without listens. That is
+     * almost always right, and the web UI can override it. */
+    c->role = board_has_camera ? LORAITP_ROLE_SENDER : LORAITP_ROLE_RECEIVER;
+
+    c->ap_enabled = true;
+    c->ap_auto_off = false;          /* see the note in appcfg.h */
+    c->ap_timeout_s = 300;
+    c->ap_password[0] = '\0';
+
+    /*
+     * EU868_G4_LP - 869.7-870.0 MHz, 5 mW, no duty-cycle limit
+     * (BNetzA Vfg. 91/2025 row 56a). Twenty dB below what g3 allows, but
+     * a hundred transfers cost no budget and need no licence, which is
+     * what you want before the link works. Move to EU868_G3 from the web
+     * UI once it does.
+     */
+    c->region = LORAITP_REG_EU868_G4_LP;
+    c->frequency_hz = 869850000u;
+    c->spreading_factor = 10;
+    c->tx_power_dbm = 7;
+    c->parity_percent = 0;
+    c->broadcast = false;
+
+    c->interval_s = 300;             /* every five minutes while testing */
+    c->image_budget = 8000;
+    c->keep_images = 32;
+    c->callsign[0] = '\0';
+}
+
+void loraitp_cfg_load(loraitp_appcfg_t *c, bool board_has_camera)
+{
+    loraitp_cfg_defaults(c, board_has_camera);
+
+    Preferences p;
+    if (!p.begin(NS, true))
+        return;                      /* nothing stored yet */
+
+    c->role = p.getUChar("role", c->role);
+    c->ap_enabled = p.getBool("ap_en", c->ap_enabled);
+    c->ap_auto_off = p.getBool("ap_off", c->ap_auto_off);
+    c->ap_timeout_s = p.getUShort("ap_to", c->ap_timeout_s);
+    p.getString("ap_pw", c->ap_password, sizeof(c->ap_password));
+
+    c->region = p.getUChar("region", c->region);
+    c->frequency_hz = p.getULong("freq", c->frequency_hz);
+    c->spreading_factor = p.getUChar("sf", c->spreading_factor);
+    c->tx_power_dbm = (int8_t)p.getChar("pwr", c->tx_power_dbm);
+    c->parity_percent = p.getUChar("parity", c->parity_percent);
+    c->broadcast = p.getBool("bcast", c->broadcast);
+
+    c->interval_s = p.getULong("interval", c->interval_s);
+    c->image_budget = p.getUShort("budget", c->image_budget);
+    c->keep_images = p.getUShort("keep", c->keep_images);
+    p.getString("call", c->callsign, sizeof(c->callsign));
+    p.end();
+}
+
+void loraitp_cfg_save(const loraitp_appcfg_t *c)
+{
+    Preferences p;
+    if (!p.begin(NS, false))
+        return;
+    p.putUChar("role", c->role);
+    p.putBool("ap_en", c->ap_enabled);
+    p.putBool("ap_off", c->ap_auto_off);
+    p.putUShort("ap_to", c->ap_timeout_s);
+    p.putString("ap_pw", c->ap_password);
+    p.putUChar("region", c->region);
+    p.putULong("freq", c->frequency_hz);
+    p.putUChar("sf", c->spreading_factor);
+    p.putChar("pwr", c->tx_power_dbm);
+    p.putUChar("parity", c->parity_percent);
+    p.putBool("bcast", c->broadcast);
+    p.putULong("interval", c->interval_s);
+    p.putUShort("budget", c->image_budget);
+    p.putUShort("keep", c->keep_images);
+    p.putString("call", c->callsign);
+    p.end();
+}
+
+const char *loraitp_cfg_region_name(uint8_t region)
+{
+    static const char *names[] = {
+        "EU868_G3", "EU868_G1", "EU868_G2", "EU868_G4", "EU868_G4_LP",
+        "EU433", "EU433_NARROW", "AMATEUR", "TEST_UNRESTRICTED"
+    };
+    if (region >= sizeof(names) / sizeof(names[0]))
+        return "?";
+    return names[region];
+}

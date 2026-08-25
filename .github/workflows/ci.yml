@@ -1,0 +1,69 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pillow
+
+      # Every number in the documentation comes out of these.
+      - name: calculators
+        run: |
+          python3 tools/airtime.py
+          python3 tools/linkbudget.py
+          python3 tools/fec_compare.py
+          python3 tools/storage.py
+
+      # The reference implementation is the executable form of SPEC.md.
+      - name: python reference and simulator
+        run: |
+          python3 sim/selftest.py
+          python3 sim/run.py
+
+      # Vectors are generated from the reference, so the C core and the
+      # Python cannot drift apart without a test failing.
+      - name: c core, port and store
+        working-directory: tests
+        run: |
+          make run
+          make port
+          make store
+          make jpeg
+
+      - name: sanitizers
+        working-directory: tests
+        run: make san
+
+      # Structure is not enough for an encoder: decode what it produced
+      # with an independent decoder and compare against the source.
+      - name: verify jpeg against pillow
+        run: |
+          mkdir -p /tmp/samples
+          ./tests/test_jpeg /tmp/samples
+          python3 tests/verify_jpeg.py /tmp/samples
+
+  firmware:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [heltec_v3, heltec_v4, xiao_esp32s3_sense, xiao_nrf52840]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install platformio
+      - name: build ${{ matrix.env }}
+        working-directory: firmware
+        run: pio run -e ${{ matrix.env }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.env }}
+          path: firmware/.pio/build/${{ matrix.env }}/*.bin

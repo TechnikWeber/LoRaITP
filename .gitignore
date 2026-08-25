@@ -24,3 +24,4 @@ tests/test_core
 tests/test_core_san
 tests/test_port
 firmware/.pio/
+tests/test_jpeg

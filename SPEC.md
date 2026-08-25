@@ -558,15 +558,32 @@ equal perceived detail.
 **Small.** 320×240 at quality ~12 lands near 4–8 kB; 160×120 near
 1.5–3 kB. Resolution is cheaper to give up than update rate.
 
-**Chunk-aligned restart markers (`CODEC = 2`).** A baseline JPEG is a
-single entropy-coded stream: lose one byte in the middle and everything
-after it is lost, because the DC coefficient prediction chain breaks.
-Setting a JPEG restart interval (`DRI`) so that restart markers fall on
-chunk boundaries turns each chunk into an independently decodable strip.
-A transfer that ends 90 % complete then yields 90 % of the picture with
-a grey band at the bottom, instead of a decoder error. This costs about
-1–2 % in file size and is the single highest-value trick in the whole
-image layer.
+**Frequent restart markers (`CODEC = 2`).** A baseline JPEG is a single
+entropy-coded stream: lose one byte in the middle and everything after
+it is lost, because the DC coefficient prediction chain breaks. A JPEG
+restart interval (`DRI`) breaks that chain at known points and gives a
+decoder somewhere to resynchronise.
+
+> **Correction.** Earlier drafts of this document said "chunk-aligned"
+> restart markers, and writing the encoder showed that is not achievable.
+> `DRI` counts MCUs, and the compressed size of an interval varies with
+> the content, so where a marker lands in the byte stream is not
+> something an encoder chooses. What *is* achievable, and what actually
+> matters, is markers frequent enough that a lost chunk damages a bounded
+> strip rather than the remainder of the picture.
+
+One marker per MCU row is a good setting. Measured on a 320×240 grayscale
+frame at quality 50, by `tests/verify_jpeg.py` decoding the output with an
+independent decoder:
+
+| | file size | rows damaged by 300 lost bytes |
+|---|---|---|
+| no restart markers | 10 002 B | **72 of 240** |
+| one marker per row | 10 116 B (+1.1 %) | **16 of 240** |
+
+So 1.1 % of the file buys a 4.5× reduction in the damage a lost packet
+does. That is the single highest-value trick in the image layer, and it
+is now measured rather than argued.
 
 **Preview first (`LAYER = 0`).** Send an 80×60 thumbnail — typically
 400–800 bytes, under a minute even at SF12 — as its own transfer before

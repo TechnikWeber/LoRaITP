@@ -84,11 +84,11 @@ provably is not. Sending the image three times instead costs the same
 airtime and fails 34 % of the time at 20 % packet loss, where the code
 fails essentially never.
 
-**Images that degrade instead of failing.** With JPEG restart markers
-aligned to chunk boundaries, a transfer that dies at 90 % yields 90 % of
-the picture and a grey band, rather than a decoder error. An optional
-thumbnail layer sends an 80×60 preview first, so a collapsing link still
-produces something.
+**Images that degrade instead of failing.** JPEG restart markers give a
+decoder somewhere to resynchronise after a lost packet. Measured: 300
+lost bytes damage **16 of 240 rows** with markers against **72 without**,
+for 1.1 % more file. An optional thumbnail layer sends an 80×60 preview
+first, so a collapsing link still produces something.
 
 **Adaptive spreading factor.** A 1.3-second probe measures the link, and
 the session picks the fastest setting with 6 dB of margin. Each SF step
@@ -109,6 +109,8 @@ $ cd tests && make run        # 81 checks on the C core
 $ cd tests && make san        # the same, under ASan and UBSan
 $ cd tests && make port       # 23 checks on the RadioLib adapter
 $ cd tests && make store      # 37 checks on the image store, real files
+$ cd tests && make jpeg       # 13 checks on the JPEG encoder
+$ ./tests/test_jpeg /tmp/s && python3 tests/verify_jpeg.py /tmp/s
 ```
 
 No dependencies, no hardware, no waiting — a transfer that takes four
@@ -203,7 +205,11 @@ than a new core.
       has never been run
 - [x] LittleFS image store — ring buffer, sidecar statistics, recovery
       from an interrupted transfer
-- [ ] Camera pipeline and WiFi AP
+- [x] Camera pipeline — grayscale capture, software JPEG with restart
+      markers, verified against an independent decoder
+- [x] WiFi access point and web UI — gallery, live airtime budget, and
+      the settings that matter in the field
+- [x] Web flasher and CI
 - [ ] Web flasher on GitHub Pages (WebSerial for the ESP32s, UF2 for the
       nRF52840)
 - [ ] Camera and image pipeline: grayscale capture, software JPEG with

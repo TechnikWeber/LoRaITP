@@ -67,18 +67,29 @@ is the first thing to spend.
 hit a byte budget matters more than encoding to hit a quality number,
 because the byte budget is what the duty cycle actually constrains.
 
-**Chunk-aligned restart markers.** This is the one that resolves an open
-question from the original design. Baseline JPEG is a single
-entropy-coded stream with a DC prediction chain running through it: a
-gap anywhere destroys everything after it. Setting the restart interval
-(`DRI`) so markers land on LoRaITP chunk boundaries makes each chunk an
-independently decodable strip, at a cost of 1–2 % in file size.
+**Frequent restart markers.** Baseline JPEG is a single entropy-coded
+stream with a DC prediction chain running through it: a gap anywhere
+destroys everything after it. A restart interval (`DRI`) breaks that
+chain and gives a decoder somewhere to resynchronise.
 
-Whether the OV2640's hardware encoder exposes a usable `DRI` register
-through the driver was listed as something to check. Encoding in
-software makes the question moot — we set the restart interval because
-we wrote the encoder call, not because a sensor vendor exposed a
-register.
+Writing the encoder corrected an assumption. Markers **cannot** be
+aligned to LoRaITP chunk boundaries: `DRI` counts MCUs, and how many
+bytes an interval compresses to depends on the picture. What is
+achievable is markers frequent enough to bound the damage — one per MCU
+row, measured on a 320×240 frame at quality 50:
+
+| | file size | rows damaged by 300 lost bytes |
+|---|---|---|
+| no markers | 10 002 B | 72 of 240 |
+| one per row | 10 116 B (+1.1 %) | **16 of 240** |
+
+`tests/verify_jpeg.py` produces those numbers by decoding the encoder's
+output with Pillow, so they are a measurement rather than an argument.
+
+Whether the OV2640's hardware encoder exposes a usable `DRI` register was
+listed as something to check. Encoding in software makes the question
+moot — we set the restart interval because we wrote the encoder, not
+because a sensor vendor exposed a register.
 
 ## Pipeline
 

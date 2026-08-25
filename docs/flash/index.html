@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang=en>
+<meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>Flash LoRaITP</title>
+<style>
+:root{color-scheme:light dark;--edge:#8884}
+body{font:16px/1.6 system-ui,-apple-system,sans-serif;margin:0 auto;padding:2rem 1rem;max-width:44rem}
+h1{font-size:1.6rem;margin:0 0 .25rem}
+.lede{opacity:.75;margin:0 0 2rem}
+.board{border:1px solid var(--edge);border-radius:8px;padding:1rem;margin:1rem 0}
+.board h2{font-size:1.05rem;margin:0 0 .25rem}
+.board p{margin:.25rem 0 .75rem;opacity:.8;font-size:.9rem}
+.warn{background:#fd05;border:1px solid #fa08;border-radius:6px;padding:.75rem 1rem;margin:1rem 0;font-size:.9rem}
+a{color:inherit}
+code{background:var(--edge);padding:.1em .35em;border-radius:3px;font-size:.85em}
+footer{margin-top:3rem;font-size:.85rem;opacity:.7}
+</style>
+
+<h1>Flash LoRaITP</h1>
+<p class=lede>Plug the board in over USB, pick it below, click install.
+No toolchain, no downloads.</p>
+
+<div class=warn id=unsupported hidden>
+  <strong>This browser cannot flash over USB.</strong>
+  Installing needs the Web Serial API, which only Chromium-based browsers
+  implement — Chrome, Edge, Opera, Brave. Firefox and Safari have declined
+  to ship it, so there is nothing to enable. The nRF52840 board below does
+  not need it and works anywhere.
+</div>
+
+<div class=board>
+  <h2>Seeed XIAO ESP32S3 Sense</h2>
+  <p>The camera node. Ships with an OV2640; pair it with a Wio-SX1262 on
+  the edge pins. Defaults to <em>sender</em> because it has a camera.</p>
+  <esp-web-install-button manifest="manifest-xiao_esp32s3_sense.json">
+  </esp-web-install-button>
+</div>
+
+<div class=board>
+  <h2>Heltec WiFi LoRa 32 V3</h2>
+  <p>No camera interface. Defaults to <em>receiver</em>.</p>
+  <esp-web-install-button manifest="manifest-heltec_v3.json">
+  </esp-web-install-button>
+</div>
+
+<div class=board>
+  <h2>Heltec WiFi LoRa 32 V4</h2>
+  <p>16 MB flash, 2 MB PSRAM, OLED. The comfortable base station.
+  Note the high-power variant reaches 28 dBm, above the 27 dBm ERP ceiling
+  of the 869.4 MHz band — the firmware refuses to configure it there.</p>
+  <esp-web-install-button manifest="manifest-heltec_v4.json">
+  </esp-web-install-button>
+</div>
+
+<div class=board>
+  <h2>Seeed XIAO nRF52840</h2>
+  <p>No WiFi, no camera — a low-power relay or a pocket receiver.
+  Flashing is drag-and-drop and needs no special browser: double-tap the
+  reset button, a USB drive appears, copy the file onto it.</p>
+  <p><a href="loraitp-xiao_nrf52840.uf2" download>Download the .uf2</a></p>
+</div>
+
+<h2>After flashing</h2>
+<p>The board raises a WiFi access point called <code>LoRaITP-XXXX</code>.
+Connect to it and open <code>http://192.168.4.1</code> — that page has the
+images, the airtime budget, and the settings: which end of the link this
+board is, which regulatory region, and how many bytes a picture may cost.</p>
+
+<p>Both ends run the same firmware. Flash two boards, set one to
+<em>sender</em> and leave the other on <em>receiver</em>.</p>
+
+<div class=warn>
+  <strong>The default is 5 mW on 869.85 MHz</strong> — the sub-band with no
+  duty-cycle limit. It burns none of the daily budget and needs no licence,
+  which is what you want while the link is still being made to work.
+  Switch to <code>EU868_G3</code> (500 mW, 10 %) from the settings page
+  once it does, and read
+  <a href="https://github.com/TechnikWeber/LoRaITP/blob/main/docs/duty-cycle.md">docs/duty-cycle.md</a>
+  before you do.
+</div>
+
+<footer>
+  <a href="https://github.com/TechnikWeber/LoRaITP">LoRaITP on GitHub</a> ·
+  built from <span id=commit>the main branch</span>
+</footer>
+
+<script type=module
+  src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+<script>
+if (!('serial' in navigator))
+  document.getElementById('unsupported').hidden = false;
+</script>

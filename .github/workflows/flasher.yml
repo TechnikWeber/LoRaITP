@@ -1,0 +1,60 @@
+name: web flasher
+
+# Builds every target and publishes docs/ to GitHub Pages, so the flasher
+# page always offers binaries that match a commit rather than whatever was
+# uploaded by hand last.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install platformio
+
+      - name: build every target
+        working-directory: firmware
+        run: |
+          for e in heltec_v3 heltec_v4 xiao_esp32s3_sense xiao_nrf52840; do
+            pio run -e "$e"
+          done
+
+      - name: collect binaries
+        run: |
+          for e in heltec_v3 heltec_v4 xiao_esp32s3_sense; do
+            mkdir -p "docs/flash/$e"
+            b="firmware/.pio/build/$e"
+            cp "$b/firmware.bin" "$b/bootloader.bin" "$b/partitions.bin" \
+               "docs/flash/$e/"
+            # boot_app0 lives in the framework package, not the build dir.
+            find ~/.platformio -name boot_app0.bin | head -1 \
+              | xargs -I{} cp {} "docs/flash/$e/"
+          done
+          # The nRF52840 boots UF2: drag and drop, no browser needed.
+          cp firmware/.pio/build/xiao_nrf52840/firmware.uf2 \
+             docs/flash/loraitp-xiao_nrf52840.uf2 || true
+          sed -i "s|the main branch|${GITHUB_SHA::7}|" docs/flash/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: docs }
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deploy
