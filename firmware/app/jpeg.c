@@ -373,11 +373,12 @@ int loraitp_jpeg_encode(const uint8_t *gray, uint16_t w, uint16_t h,
             }
 
             float px[64];
-            for (int y = 0; y < 8; y++)
+            for (int y = 0; y < 8; y++) {
+                size_t row = (size_t)(by * 8 + y) * (size_t)w
+                             + (size_t)(bx * 8);
                 for (int x = 0; x < 8; x++)
-                    px[y * 8 + x] =
-                        (float)gray[(size_t)(by * 8 + y) * w + bx * 8 + x]
-                        - 128.0f;
+                    px[y * 8 + x] = (float)gray[row + (size_t)x] - 128.0f;
+            }
             encode_block(&e, px, &dc_pred);
             mcu++;
         }
