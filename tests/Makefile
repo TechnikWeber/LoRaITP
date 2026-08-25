@@ -32,7 +32,26 @@ san: vectors/vectors.h
 	  $(SRC) test_core.c -o test_core_san
 	./test_core_san
 
-clean:
-	rm -f test_core test_core_san *.o ../src/*.o ../port/*.o
+# The RadioLib adapter, compiled against tests/mock/. Proves the port
+# satisfies the core's contract; does not prove it matches the real
+# RadioLib, which only hardware can.
+CXX      ?= c++
+CXXFLAGS ?= -std=c++17 -Wall -Wextra -Wpedantic -Wshadow -O1 -g
+PORT_SRC = ../src/loraitp_frame.c ../src/loraitp_crc.c ../src/loraitp_bitmap.c \
+           ../src/loraitp_fec.c ../src/loraitp_mac.c ../src/loraitp_governor.c \
+           ../src/loraitp_session.c
 
-.PHONY: all run san clean
+test_port: vectors/vectors.h
+	$(CC)  $(CFLAGS) -c $(PORT_SRC)
+	$(CXX) $(CXXFLAGS) -I../src -I../port -Imock \
+	  ../port/port_radiolib.cpp mock/mock.cpp test_port_radiolib.cpp \
+	  loraitp_*.o -o $@
+	rm -f loraitp_*.o
+
+port: test_port
+	./test_port
+
+clean:
+	rm -f test_core test_core_san test_port *.o ../src/*.o ../port/*.o
+
+.PHONY: all run san port clean

@@ -107,6 +107,7 @@ $ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
 $ python3 sim/run.py          # 12 full transfers against simulated loss
 $ cd tests && make run        # 81 checks on the C core
 $ cd tests && make san        # the same, under ASan and UBSan
+$ cd tests && make port       # 19 checks on the RadioLib adapter
 ```
 
 No dependencies, no hardware, no waiting — a transfer that takes four
@@ -192,10 +193,12 @@ than a new core.
       12 transfer scenarios, no hardware
 - [x] Portable C core — 81 checks, warning-free, sanitizer-clean,
       3.9 kB of context and no allocation
-- [ ] `port_radiolib.cpp` and pin maps — nothing runs on hardware until
-      this exists
+- [x] `port_radiolib.cpp` and pin maps — one adapter for all four boards,
+      19 contract checks against a mocked RadioLib
+- [ ] **First build against the real RadioLib**, and the XIAO pin numbers
 - [ ] Bench loopback on `EU868_G4_LP` (5 mW, no duty cycle: no budget
-      burnt, no licence needed)
+      burnt, no licence needed) — `firmware/node/main.cpp` is written and
+      has never been run
 - [ ] LittleFS storage, camera pipeline, WiFi AP
 - [ ] Web flasher on GitHub Pages (WebSerial for the ESP32s, UF2 for the
       nRF52840)

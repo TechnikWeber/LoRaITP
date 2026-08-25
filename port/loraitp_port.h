@@ -71,6 +71,15 @@ typedef struct loraitp_port {
     int (*radio_configure)(void *ctx, const loraitp_radio_cfg_t *cfg);
     int (*radio_send)(void *ctx, const uint8_t *buf, uint8_t len,
                       uint32_t *toa_ms);
+    /*
+     * Returns the frame length, 0 on timeout or a frame the PHY CRC
+     * rejected, or a negative error. A timeout is not an error: from the
+     * protocol's point of view a corrupted frame simply did not arrive,
+     * and that clean erasure is what the coding in SPEC.md 5.2 relies on.
+     *
+     * `cap` is uint8_t, so 255 is the largest capacity expressible -
+     * which is the LoRa PHY maximum. Passing 256 truncates to zero.
+     */
     int (*radio_receive)(void *ctx, uint8_t *buf, uint8_t cap,
                          uint32_t timeout_ms, loraitp_rx_meta_t *meta);
     int (*radio_sleep)(void *ctx);
