@@ -201,7 +201,10 @@ static int transmit(loraitp_ctx_t *c, size_t len, int depth)
     c->stats.frames_tx++;
 
     int ft = loraitp_frame_type(c->txbuf, len);
-    uint16_t sq = (len >= 4) ? (uint16_t)(c->txbuf[2] | (c->txbuf[3] << 8)) : 0;
+    uint16_t sq = 0;
+    if (len >= 4)
+        sq = (uint16_t)((uint16_t)c->txbuf[2]
+                        | (uint16_t)((uint16_t)c->txbuf[3] << 8));
     trace(c, LORAITP_EV_TX, (uint8_t)(ft < 0 ? 0 : ft), sq, (uint8_t)len,
           0, 0, toa_ms);
     return LORAITP_OK;
@@ -234,7 +237,10 @@ static int receive(loraitp_ctx_t *c, uint32_t timeout_ms,
     c->stats.frames_rx++;
 
     int ft = loraitp_frame_type(c->rxbuf, (size_t)body);
-    uint16_t sq = (body >= 4) ? (uint16_t)(c->rxbuf[2] | (c->rxbuf[3] << 8)) : 0;
+    uint16_t sq = 0;
+    if (body >= 4)
+        sq = (uint16_t)((uint16_t)c->rxbuf[2]
+                        | (uint16_t)((uint16_t)c->rxbuf[3] << 8));
     trace(c, LORAITP_EV_RX, (uint8_t)(ft < 0 ? 0 : ft), sq, (uint8_t)body,
           meta ? meta->rssi_dbm : 0, meta ? meta->snr_qdb : 0, 0);
     return ft;
