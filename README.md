@@ -266,6 +266,7 @@ $ cd tests && make san        # the same, under ASan and UBSan
 $ cd tests && make port       # 23 checks on the RadioLib adapter
 $ cd tests && make store      # 37 checks on the image store, real files
 $ cd tests && make jpeg       # 13 checks on the JPEG encoder
+$ cd tests && make boards     # 22 checks on the board pin maps
 $ ./tests/test_jpeg /tmp/s && python3 tests/verify_jpeg.py /tmp/s
 ```
 

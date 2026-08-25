@@ -36,6 +36,7 @@ jobs:
           make port
           make store
           make jpeg
+          make boards
 
       - name: sanitizers
         working-directory: tests

@@ -75,10 +75,14 @@ static const loraitp_board_t LORAITP_BOARD = {
      */
     .lora_sck = XIAO_D8, .lora_miso = XIAO_D9, .lora_mosi = XIAO_D10,
 
-    .lora_dio1 = XIAO_D1,    /* GPIO2  - silkscreened DIO1 */
+    /* Declaration order, not silkscreen order: C++ rejects designated
+     * initialisers that run out of order, and these headers are included
+     * from C++ translation units. On the module they read, top to bottom,
+     * DIO1 RST BUSY NSS. */
+    .lora_nss  = XIAO_D4,    /* GPIO5  - silkscreened NSS */
     .lora_rst  = XIAO_D2,    /* GPIO3  - silkscreened RST; also SD CS, see above */
     .lora_busy = XIAO_D3,    /* GPIO4  - silkscreened BUSY */
-    .lora_nss  = XIAO_D4,    /* GPIO5  - silkscreened NSS */
+    .lora_dio1 = XIAO_D1,    /* GPIO2  - silkscreened DIO1 */
 
     .lora_ant_sw = XIAO_D5,  /* GPIO6  - silkscreened RF_SW, must be driven */
     .lora_tcxo = true, .lora_tcxo_v = 1.8f,

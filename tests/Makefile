@@ -68,7 +68,19 @@ test_jpeg: ../firmware/app/jpeg.c test_jpeg.c
 jpeg: test_jpeg
 	./test_jpeg
 
-clean:
-	rm -f test_core test_core_san test_port test_store test_jpeg *.o ../src/*.o ../port/*.o
+# Board headers as C++. They are included from .cpp on the target, and
+# C++ rejects out-of-order designated initialisers where C accepts them.
+# Designated initialisers are a C++20 feature that GCC also accepts as an
+# extension before then, which is how the firmware uses them. Either way
+# the declaration-order rule applies, and that is what this catches.
+test_boards: test_boards.cpp ../firmware/boards/*.h
+	$(CXX) -std=c++17 -Wall -Wextra -Wno-c++20-extensions -O1 \
+	  -I../firmware/boards test_boards.cpp -o $@
 
-.PHONY: all run san port store jpeg clean
+boards: test_boards
+	./test_boards
+
+clean:
+	rm -f test_core test_core_san test_port test_store test_jpeg test_boards *.o ../src/*.o ../port/*.o
+
+.PHONY: all run san port store jpeg boards clean
