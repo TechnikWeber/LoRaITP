@@ -37,6 +37,7 @@ static loraitp_store_t *store;
 
 static uint8_t store_mem[512];
 static uint8_t ctx_mem[8 * 1024];
+static loraitp_ctx_t *ctx;
 static uint8_t jpegbuf[32 * 1024];
 
 /* Erasure coding needs a whole block resident. The core allocates
@@ -100,14 +101,23 @@ static void status_cb(void *user, loraitp_webui_status_t *out)
 
     /* A throwaway context purely to ask the governor. Cheap: it holds no
      * state beyond the rolling window, which starts empty. */
-    static uint8_t probe_mem[8 * 1024];
-    loraitp_ctx_t *c = (loraitp_ctx_t *)probe_mem;
-    if (loraitp_init(c, &port, &s) == LORAITP_OK) {
+    /*
+     * Ask the live context, not a fresh one.
+     *
+     * The governor's rolling window lives in the context, and creating a
+     * new one to answer a status request would report an empty window -
+     * always 0% used, however much had just been transmitted. Worse, the
+     * loop used to re-init before every transfer, which reset the window
+     * for real: each session would believe it had the whole hourly budget
+     * to itself, and the duty-cycle accounting the whole design rests on
+     * would have been decoration.
+     */
+    if (ctx != NULL) {
         loraitp_budget_t b;
-        loraitp_budget_query(c, &b);
+        loraitp_budget_query(ctx, &b);
         out->airtime_used_ms = b.airtime_used_ms;
         out->airtime_budget_ms = b.airtime_budget_ms;
-        out->bytes_remaining = loraitp_budget_bytes_remaining(c);
+        out->bytes_remaining = loraitp_budget_bytes_remaining(ctx);
 
         uint8_t pl = loraitp_max_payload_for_toa(cfg.spreading_factor,
                                                  cfg.bandwidth_hz,
@@ -230,6 +240,29 @@ void setup(void)
             camera_state = "not detected - sending a test pattern";
             LOG("no camera - will send a test pattern instead");
         }
+    }
+
+    /*
+     * One context for the life of the firmware. Settings changes reboot
+     * the board, so there is never a reason to rebuild it - and rebuilding
+     * it would throw away the duty-cycle history.
+     */
+    ctx = (loraitp_ctx_t *)ctx_mem;
+    if (loraitp_ctx_size() > sizeof(ctx_mem))
+        die("context buffer too small", (int)loraitp_ctx_size());
+
+    loraitp_session_cfg_t s;
+    configure_session(&s);
+    rc = loraitp_init(ctx, &port, &s);
+    if (rc != LORAITP_OK) {
+        /* A regulatory refusal lands here: amateur mode without a call
+         * sign, a frequency outside the region, power above its ERP
+         * limit. Refusing is the intended behaviour, so keep the access
+         * point up and say why rather than dying silently. */
+        ctx = NULL;
+        snprintf(last_result, sizeof(last_result),
+                 "refused by the duty-cycle governor (error %d)", rc);
+        LOG("%s - check region, frequency, power and call sign", last_result);
     }
 
     loraitp_webui_begin(&cfg, store, status_cb, trigger_cb, NULL);
@@ -385,24 +418,9 @@ void loop(void)
         return;
     }
 
-    loraitp_session_cfg_t s;
-    configure_session(&s);
-
-    loraitp_ctx_t *ctx = (loraitp_ctx_t *)ctx_mem;
-    if (loraitp_ctx_size() > sizeof(ctx_mem))
-        die("context buffer too small", (int)loraitp_ctx_size());
-
-    int rc = loraitp_init(ctx, &port, &s);
-    if (rc != LORAITP_OK) {
-        /*
-         * A regulatory refusal lands here: amateur mode without a call
-         * sign, a frequency outside the region, power above its ERP
-         * limit. Refusing to transmit is the intended behaviour, so say
-         * why and wait rather than pretending.
-         */
-        snprintf(last_result, sizeof(last_result),
-                 "refused by the duty-cycle governor (error %d)", rc);
-        LOG("%s - check region, frequency, power and call sign", last_result);
+    if (ctx == NULL) {
+        /* Configuration was refused at startup. The web page is up and
+         * says so; there is nothing useful to do on the radio. */
         next_run_ms = millis() + 30000;
         return;
     }

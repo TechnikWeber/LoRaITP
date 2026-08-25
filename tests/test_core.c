@@ -513,6 +513,72 @@ static void test_transfer(void)
           "reassembled image matches the original CRC-32");
 }
 
+/*
+ * Two transfers on one context. The governor's rolling window lives in
+ * the context, so re-initialising between sessions silently resets the
+ * duty-cycle accounting - every transfer then believes it has the whole
+ * hourly budget to itself, and the limit the whole design rests on
+ * becomes decoration. The firmware did exactly that until it was caught
+ * by reading the code; this makes sure it stays caught.
+ */
+static void test_budget_persists(void)
+{
+    printf("\nduty-cycle accounting across sessions\n");
+    static uint8_t image[2000];
+    static uint8_t simmem[SIM_MEM];
+    static uint8_t ctxmem[CTX_MEM];
+    for (size_t i = 0; i < sizeof(image); i++)
+        image[i] = (uint8_t)(i * 13);
+
+    struct loraitp_sim *sim = loraitp_sim_new(simmem, sizeof(simmem), image,
+                                              sizeof(image), NULL);
+    loraitp_port_t p;
+    loraitp_sim_port(&p, sim);
+
+    loraitp_session_cfg_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.mode = LORAITP_MODE_INTERACTIVE;
+    cfg.region = LORAITP_REG_EU868_G1;      /* 1%, so a budget exists */
+    cfg.frequency_hz = 868300000u;
+    cfg.bandwidth_hz = 125000u;
+    cfg.spreading_factor = 10;
+    cfg.coding_rate = 1;
+    cfg.tx_power_dbm = 14;
+    cfg.session_timeout_ms = 60000u;
+
+    loraitp_ctx_t *c = (loraitp_ctx_t *)ctxmem;
+    CHECK(loraitp_init(c, &p, &cfg) == LORAITP_OK, "init once");
+
+    loraitp_image_desc_t d;
+    memset(&d, 0, sizeof(d));
+    d.img_id = 1; d.layer = 1; d.img_len = sizeof(image); d.codec = 2;
+    d.img_crc32 = loraitp_crc32(image, sizeof(image));
+
+    loraitp_stats_t st;
+    loraitp_send_image(c, &d, &st);
+    loraitp_budget_t b1;
+    loraitp_budget_query(c, &b1);
+    CHECK(b1.airtime_used_ms > 0, "the first transfer is accounted for");
+
+    d.img_id = 2;
+    loraitp_send_image(c, &d, &st);
+    loraitp_budget_t b2;
+    loraitp_budget_query(c, &b2);
+    CHECK(b2.airtime_used_ms > b1.airtime_used_ms,
+          "the second adds to the first rather than replacing it");
+    printf("       %u ms after one transfer, %u ms after two, of %u\n",
+           b1.airtime_used_ms, b2.airtime_used_ms, b2.airtime_budget_ms);
+
+    /* And a fresh context must start empty, or the test above proves
+     * nothing about where the state actually lives. */
+    static uint8_t ctx2[CTX_MEM];
+    loraitp_ctx_t *c2 = (loraitp_ctx_t *)ctx2;
+    loraitp_init(c2, &p, &cfg);
+    loraitp_budget_t b3;
+    loraitp_budget_query(c2, &b3);
+    CHECK(b3.airtime_used_ms == 0, "a new context starts with an empty window");
+}
+
 int main(void)
 {
     printf("LoRaITP core tests\n");
@@ -526,6 +592,7 @@ int main(void)
     test_fec();
     test_governor();
     test_transfer();
+    test_budget_persists();
     printf("\n%d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }
