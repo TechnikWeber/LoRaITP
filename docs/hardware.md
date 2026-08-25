@@ -15,12 +15,19 @@
 | `jpeg.c` + `camera.cpp` — grayscale capture and encode | written; encoder verified against an independent decoder |
 | `webui.cpp` — access point, gallery, settings | written |
 | `main.cpp` — schedule, roles, pin maps | written |
-| **A build against the real toolchain** | **in progress** |
+| A build against the real toolchain | **green** — three ESP32 targets in CI |
 | **Anything on actual hardware** | **not done** |
 
-Everything above the radio is written and tested on a host. What has not
-happened is a board being switched on, and until that has, treat the
-firmware as a well-argued draft rather than something that works.
+Everything above the radio is written, tested on a host, and builds for
+all three ESP32 targets — 901 kB of flash and 126 kB of RAM on the XIAO,
+which is 43 % and 38 % of what is available. What has not happened is a
+board being switched on, and until that has, treat the firmware as a
+well-argued draft rather than something that works.
+
+The nRF52840 is the exception and deliberately so: the core and the
+RadioLib port compile for it, but the application is built on WiFi, NVS
+and a filesystem the part does not have. That needs a different
+application, not a few conditionals.
 
 ## The boards
 
@@ -31,7 +38,7 @@ Numbers from `python3 tools/storage.py`.
 | Heltec WiFi LoRa 32 **V3** | ESP32-S3FN8 | 8 MB | 512 kB SRAM | no | yes | 472 |
 | Heltec WiFi LoRa 32 **V4** | ESP32-S3R2 | **16 MB** | 512 kB + **2 MB PSRAM** | no | yes | **1435** |
 | **XIAO ESP32S3 Sense** | ESP32-S3R8 | 8 MB | 512 kB + **8 MB PSRAM** | **yes, included** | yes | 472 |
-| XIAO nRF52840 + Wio-SX1262 | nRF52840 | 1 MB + 2 MB QSPI | 256 kB | no | **no** | 240 |
+| XIAO nRF52840 + Wio-SX1262 | nRF52840 | 1 MB + 2 MB QSPI | 256 kB | no | **no** | *firmware not ported* |
 
 Storage is a non-issue everywhere. Five images is 0.35–2 % of the image
 store on every board, and flash wear is thousands of years out.

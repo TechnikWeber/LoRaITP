@@ -11,12 +11,13 @@ away, and a regulatory airtime budget measured in seconds per hour.
 It runs directly on the LoRa PHY — no LoRaWAN, no network server, no
 gateway. A sender and a receiver that agree on a frequency are enough.
 
-> **Status: the protocol works, the radio has not been switched on yet.**
+> **Status: everything builds and passes; nothing has been on the air.**
 > The specification is complete and every number in it is computed rather
 > than estimated. A Python reference implementation runs full transfers
-> against a simulated channel, and a portable C core passes 81 checks
-> against vectors generated from it. Firmware is next.
-> See [the roadmap](#roadmap).
+> against a simulated channel, a portable C core passes 81 checks against
+> vectors generated from it, and the firmware builds for all three ESP32
+> targets — 43 % of flash, 38 % of RAM on the tightest of them. The next
+> step is two boards on a desk. See [the roadmap](#roadmap).
 
 ---
 
@@ -101,10 +102,10 @@ Full details in **[SPEC.md](SPEC.md)**.
 
 ## Getting started
 
-> **Read this first.** The protocol is finished and heavily tested; the
-> firmware compiles and passes its tests on a computer, but **no board has
-> ever been switched on**. You would be the first. Expect to debug
-> something.
+> **Read this first.** The protocol is finished and heavily tested, and
+> the firmware builds for all three ESP32 boards — but **no board has ever
+> been switched on**. You would be the first. Expect to debug something,
+> and see [if nothing arrives](#if-nothing-arrives) when you do.
 
 You need two boards. They run the **same firmware** — which end of the
 link a board is is a setting, not a separate build.
@@ -287,9 +288,11 @@ the specification, one in the C core, one in the Python reference.
       3.9 kB of context and no allocation
 - [x] `port_radiolib.cpp` and pin maps — one adapter for all four boards,
       19 contract checks against a mocked RadioLib
-- [ ] **First build against the real RadioLib**, and the XIAO pin numbers
-- [ ] Bench loopback on `EU868_G4_LP` (5 mW, no duty cycle: no budget
-      burnt, no licence needed) — `firmware/node/main.cpp` is written and
+- [x] **Builds against the real RadioLib and Arduino core** — three ESP32
+      targets, green in CI
+- [ ] The XIAO pin numbers confirmed by a board that actually works
+- [ ] **Bench loopback on `EU868_G4_LP`** (5 mW, no duty cycle: no budget
+      burnt, no licence needed) — the firmware is written and builds; it
       has never been run
 - [x] LittleFS image store — ring buffer, sidecar statistics, recovery
       from an interrupted transfer
