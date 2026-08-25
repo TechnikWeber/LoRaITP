@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# build output
+build/
+.pio/
+.pioenvs/
+*.bin
+*.elf
+*.map
+
+# captured / received images from test runs
+captures/
+*.raw
+
+.vscode/
+.idea/
+.DS_Store
