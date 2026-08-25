@@ -113,27 +113,47 @@ So the camera node is:
 > **+ Wio-SX1262 wired to the edge pins** — the non-Kit board, or the Kit
 > board reached with jumper leads
 
-The assignment in
-[`firmware/boards/xiao_esp32s3_sense.h`](../firmware/boards/xiao_esp32s3_sense.h):
+**Confirmed** against the silkscreen of an actual Wio-SX1262 for XIAO —
+the plug-on variant with two 7-pin sockets. Read from underneath it says
+`VIN GND 3V3 MOSI MISO SCK D7` down one side and
+`D0 DIO1 RST BUSY NSS RF_SW D6` down the other, which flips to:
 
 | Signal | XIAO pin | GPIO | Note |
 |---|---|---|---|
-| SCK | D8 | 7 | SPI bus, shared with the Sense SD card |
+| MOSI | D10 | 9 | SPI bus, shared with the Sense SD card |
 | MISO | D9 | 8 | " |
-| MOSI | D10 | 9 | " |
-| NSS | D1 | 2 | |
-| RST | D3 | 4 | |
-| BUSY | D4 | 5 | |
-| DIO1 | D0 | 1 | any S3 GPIO can raise an interrupt |
+| SCK | D8 | 7 | " |
+| DIO1 | D1 | 2 | |
+| **RST** | **D2** | **3** | **also the Sense SD card's chip select** |
+| BUSY | D3 | 4 | |
+| NSS | D4 | 5 | |
+| **RF_SW** | **D5** | **6** | **must be driven by the host** |
 
-That leaves D5 free for an RF-switch line if the module needs one, D6/D7
-for the serial console, and D11/D12 for the microphone. Comfortable, not
-a squeeze.
+D0, D6 and D7 pass through unused; D6/D7 are the serial console, so D0
+(GPIO1) is the one free edge pin — enough for the button that raises the
+access point.
 
-Sharing the SPI bus with the SD card is normal — SPI is a bus and the two
-devices have different chip selects. We do not use the SD card, but if one
-is fitted, its CS on GPIO3 must be driven high or it will drive MISO and
-corrupt every radio read.
+**`RF_SW` settles the question that mattered most.** This module does not
+steer its antenna switch from DIO2 internally; it expects GPIO6 to be
+driven. Configured wrongly, the radio transmits into a matched load and
+hears nothing, which is indistinguishable from being out of range. The
+port drives it high to transmit — the convention, not a measurement, so
+if the link works in one direction only that is the first thing to
+invert.
+
+**`RST` on GPIO3 collides with the Sense SD card's chip select**, on the
+same SPI bus. With a card fitted, every radio reset would select the SD
+card and it would drive MISO. Leave the slot empty — images live in
+internal flash — or move `RST` to D0 with a jumper.
+
+### Will it physically stack?
+
+Electrically it is settled either way. Mechanically depends on whether
+the Sense expansion board passes the XIAO's edge pins through: the camera
+sits under the XIAO on the B2B connector, and the radio board's sockets
+want that same space. If the three do not stack, jumper leads from the
+radio board's sockets to the XIAO's pins give exactly the same wiring —
+SPI at a few megahertz over flying leads is fine.
 
 If you would rather keep everything on a Heltec, the alternative is an
 **ArduCam Mini 2MP Plus**, an OV2640 behind an SPI interface — about six

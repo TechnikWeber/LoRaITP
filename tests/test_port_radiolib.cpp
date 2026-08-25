@@ -103,6 +103,40 @@ int main(void)
     check(meta.rssi_dbm == -98 && meta.snr_qdb == -20,
           "RSSI and SNR reach the caller in the units the core expects");
 
+    /*
+     * The RF switch, in all three flavours. This is the setting that
+     * fails silently: a radio configured with the wrong one transmits
+     * into a matched load and hears nothing, which is indistinguishable
+     * from being out of range.
+     */
+    {
+        loraitp_radiolib_cfg_t c2;
+        loraitp_port_t p2;
+
+        loraitp_radiolib_defaults(&c2);
+        c2.pin_nss = 8; c2.pin_busy = 13; c2.pin_dio1 = 14;
+        check(c2.dio2_as_rf_switch, "DIO2 control is the default");
+        memset(&p2, 0, sizeof(p2));
+        loraitp_radiolib_attach(&p2, &c2);
+        check(mock_dio2_rfsw(), "DIO2 switch is actually enabled");
+
+        /* Single RF_SW line, as the Seeed Wio-SX1262 needs. */
+        c2.dio2_as_rf_switch = false;
+        c2.pin_rf_sw = 6;
+        memset(&p2, 0, sizeof(p2));
+        loraitp_radiolib_attach(&p2, &c2);
+        check(mock_rfsw_tx() == 6 && mock_rfsw_rx() == RADIOLIB_NC,
+              "a single RF_SW pin is driven high to transmit");
+
+        /* Two separate lines. */
+        c2.pin_rf_sw = LORAITP_PIN_NONE;
+        c2.pin_rx_en = 4; c2.pin_tx_en = 5;
+        memset(&p2, 0, sizeof(p2));
+        loraitp_radiolib_attach(&p2, &c2);
+        check(mock_rfsw_rx() == 4 && mock_rfsw_tx() == 5,
+              "a two-pin RF switch is wired through");
+    }
+
     /* Reconfiguring mid-session is what the SF probe does. */
     loraitp_radio_cfg_t rc;
     memset(&rc, 0, sizeof(rc));

@@ -23,17 +23,32 @@
 extern "C" {
 #endif
 
+/* Also defined by firmware/boards/board.h; same value. */
+#ifndef LORAITP_PIN_NONE
+#define LORAITP_PIN_NONE 0xFF
+#endif
+
 typedef struct {
     /* Pins, normally taken straight from firmware/boards/<board>.h */
     uint8_t pin_nss, pin_dio1, pin_rst, pin_busy;
     uint8_t pin_sck, pin_miso, pin_mosi;
 
     /*
-     * RF switch. Most SX1262 modules wire the switch to DIO2; a few
-     * bring it out to a GPIO instead. Getting this wrong gives you a
-     * radio that transmits into a matched load and hears nothing.
+     * RF switch, in three flavours. Getting this wrong gives a radio that
+     * transmits into a matched load and hears nothing - which looks
+     * exactly like being out of range.
+     *
+     *   dio2_as_rf_switch  the module steers it internally from DIO2.
+     *                      True for most SX1262 modules.
+     *   pin_rf_sw          one host-driven line: high in TX, low in RX.
+     *                      This is what the Seeed Wio-SX1262 needs; it
+     *                      silkscreens the pin RF_SW.
+     *   pin_rx_en/pin_tx_en  two separate lines.
+     *
+     * Set exactly one of the three.
      */
     bool    dio2_as_rf_switch;
+    uint8_t pin_rf_sw;               /* LORAITP_PIN_NONE if unused */
     uint8_t pin_rx_en, pin_tx_en;    /* LORAITP_PIN_NONE if unused */
 
     bool    tcxo;

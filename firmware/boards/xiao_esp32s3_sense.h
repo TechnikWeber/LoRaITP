@@ -22,10 +22,28 @@
  * few MHz over jumper leads is entirely reasonable. (The camera would
  * not be - 20 MHz parallel - which is exactly why it stays on the B2B.)
  *
- * VERIFY BEFORE POWER-UP: the assignment below is a free-pin choice, not
- * a vendor pinout. It says which XIAO pin each radio signal should be
- * wired to; the module's own labelling has to be matched to it by hand.
- * See firmware/boards/README.md.
+ * The assignment below is READ OFF THE MODULE, not chosen by us. The
+ * Wio-SX1262 for XIAO is a plug-on board with two 7-pin sockets matching
+ * the XIAO's own edge pins, silkscreened (viewed from underneath):
+ *
+ *     left  column, top down:  VIN GND 3V3 MOSI MISO SCK D7
+ *     right column, top down:  D0 DIO1 RST BUSY NSS RF_SW D6
+ *
+ * Flipping that to the top view gives the map below.
+ *
+ * TWO THINGS TO KNOW:
+ *
+ * 1. RF_SW is a real pin. This module does NOT steer its antenna switch
+ *    from DIO2 internally - it expects the host to drive GPIO6. Configure
+ *    dio2_as_rf_switch = false or the radio transmits into a matched load
+ *    and hears nothing, which is indistinguishable from being out of
+ *    range and a miserable thing to debug.
+ *
+ * 2. RST lands on GPIO3, which is also the SD card's chip select on the
+ *    Sense expansion board, on the same SPI bus. With a card fitted,
+ *    every radio reset would select the SD card and it would drive MISO.
+ *    Leave the SD slot empty, or move RST to D0 (GPIO1) with a jumper.
+ *    Images live in internal flash, so the card is not needed.
  */
 #ifndef LORAITP_BOARD_XIAO_ESP32S3_SENSE_H
 #define LORAITP_BOARD_XIAO_ESP32S3_SENSE_H
@@ -33,7 +51,7 @@
 /* XIAO edge pins -> ESP32-S3 GPIO (Seeed pinout) */
 #define XIAO_D0  1
 #define XIAO_D1  2
-#define XIAO_D2  3    /* SD card CS on the Sense B2B - avoid if a card is in */
+#define XIAO_D2  3    /* radio RST here; also SD card CS on the Sense B2B */
 #define XIAO_D3  4
 #define XIAO_D4  5    /* also I2C SDA */
 #define XIAO_D5  6    /* also I2C SCL */
@@ -57,21 +75,12 @@ static const loraitp_board_t LORAITP_BOARD = {
      */
     .lora_sck = XIAO_D8, .lora_miso = XIAO_D9, .lora_mosi = XIAO_D10,
 
-    .lora_nss  = XIAO_D1,    /* GPIO2 */
-    .lora_rst  = XIAO_D3,    /* GPIO4 */
-    .lora_busy = XIAO_D4,    /* GPIO5 */
-    .lora_dio1 = XIAO_D0,    /* GPIO1 - any S3 GPIO can raise an interrupt */
+    .lora_dio1 = XIAO_D1,    /* GPIO2  - silkscreened DIO1 */
+    .lora_rst  = XIAO_D2,    /* GPIO3  - silkscreened RST; also SD CS, see above */
+    .lora_busy = XIAO_D3,    /* GPIO4  - silkscreened BUSY */
+    .lora_nss  = XIAO_D4,    /* GPIO5  - silkscreened NSS */
 
-    /*
-     * The Kit wiring brings the RF switch out to GPIO38, which suggests
-     * the module does not steer it from DIO2 internally. If that holds
-     * for the board you have, set dio2_as_rf_switch false in the radio
-     * config and wire the switch to D5 (GPIO6), which is left free for
-     * exactly this. Getting it wrong gives a radio that transmits into a
-     * matched load and hears nothing - indistinguishable from being out
-     * of range.
-     */
-    .lora_ant_sw = LORAITP_PIN_NONE,   /* D5 / GPIO6 if the module needs it */
+    .lora_ant_sw = XIAO_D5,  /* GPIO6  - silkscreened RF_SW, must be driven */
     .lora_tcxo = true, .lora_tcxo_v = 1.8f,
     .max_tx_dbm = 22,
 
@@ -88,9 +97,11 @@ static const loraitp_board_t LORAITP_BOARD = {
 };
 
 /*
- * Free after the radio: D5 (GPIO6, or the RF switch), D6/D7 (the serial
- * console), D11/D12 (the microphone, if you want it). D2 belongs to the
- * SD card. That is comfortable headroom, not a squeeze.
+ * The module passes D0, D6 and D7 through without using them. D6/D7 are
+ * the serial console, so D0 (GPIO1) is the one genuinely free edge pin -
+ * enough for a button to raise the access point, which is all the
+ * application needs. D11/D12 remain available on the B2B side if the
+ * microphone is ever wanted.
  */
 
 #endif

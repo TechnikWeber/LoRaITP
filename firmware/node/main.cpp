@@ -98,6 +98,18 @@ void setup(void)
     rcfg.tcxo = LORAITP_BOARD.lora_tcxo;
     rcfg.tcxo_voltage = LORAITP_BOARD.lora_tcxo_v;
 
+    /*
+     * A board that names an antenna-switch pin has to have it driven; one
+     * that does not steers the switch from DIO2 internally. Silently
+     * getting this wrong is the single most likely reason for a radio
+     * that configures cleanly and then hears nothing.
+     */
+    if (LORAITP_BOARD.lora_ant_sw != LORAITP_PIN_NONE) {
+        rcfg.dio2_as_rf_switch = false;
+        rcfg.pin_rf_sw = LORAITP_BOARD.lora_ant_sw;
+        Serial.printf("RF switch on GPIO%u\n", LORAITP_BOARD.lora_ant_sw);
+    }
+
     int rc = loraitp_radiolib_attach(&port, &rcfg);
     if (rc != LORAITP_OK)
         die("radio attach", rc);

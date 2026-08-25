@@ -25,6 +25,7 @@
 #define RADIOLIB_ERR_RX_TIMEOUT   (-6)
 #define RADIOLIB_ERR_CRC_MISMATCH (-7)
 #define RADIOLIB_ERR_TX_TIMEOUT   (-5)
+#define RADIOLIB_NC               (0xFFFFFFFFu)
 
 /*
  * Test hooks. The real library has nothing like these; they exist so a
@@ -33,6 +34,9 @@
 void mock_set_rx_frame(const uint8_t *data, size_t len);
 void mock_reset();
 unsigned mock_tx_count();
+uint32_t mock_rfsw_tx();
+uint32_t mock_rfsw_rx();
+bool mock_dio2_rfsw();
 
 class Module {
 public:
@@ -60,6 +64,7 @@ public:
 
     int16_t setDio2AsRfSwitch(bool enable);
     void    setRfSwitchPins(uint32_t rxEn, uint32_t txEn);
+
     void    setDio1Action(void (*func)(void));
 
     int16_t startTransmit(uint8_t *data, size_t len);

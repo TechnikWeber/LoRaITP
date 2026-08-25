@@ -107,7 +107,7 @@ $ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
 $ python3 sim/run.py          # 12 full transfers against simulated loss
 $ cd tests && make run        # 81 checks on the C core
 $ cd tests && make san        # the same, under ASan and UBSan
-$ cd tests && make port       # 19 checks on the RadioLib adapter
+$ cd tests && make port       # 23 checks on the RadioLib adapter
 $ cd tests && make store      # 37 checks on the image store, real files
 ```
 

@@ -14,6 +14,8 @@ void yield(void) { ++g_ms; }
 }
 
 static void (*g_dio1_cb)(void) = nullptr;
+static uint32_t g_rfsw_rx = 0, g_rfsw_tx = 0;
+static bool g_dio2_rfsw = false;
 static uint8_t g_rx[256];
 static size_t g_rx_len = 0;
 static unsigned g_tx_count = 0;
@@ -41,8 +43,12 @@ int16_t SX1262::setOutputPower(int8_t) { return RADIOLIB_ERR_NONE; }
 int16_t SX1262::setCurrentLimit(float) { return RADIOLIB_ERR_NONE; }
 int16_t SX1262::explicitHeader() { return RADIOLIB_ERR_NONE; }
 int16_t SX1262::setCRC(uint8_t) { return RADIOLIB_ERR_NONE; }
-int16_t SX1262::setDio2AsRfSwitch(bool) { return RADIOLIB_ERR_NONE; }
-void SX1262::setRfSwitchPins(uint32_t, uint32_t) {}
+int16_t SX1262::setDio2AsRfSwitch(bool en) { g_dio2_rfsw = en; return RADIOLIB_ERR_NONE; }
+void SX1262::setRfSwitchPins(uint32_t rxEn, uint32_t txEn)
+{ g_rfsw_rx = rxEn; g_rfsw_tx = txEn; }
+uint32_t mock_rfsw_tx() { return g_rfsw_tx; }
+uint32_t mock_rfsw_rx() { return g_rfsw_rx; }
+bool mock_dio2_rfsw() { return g_dio2_rfsw; }
 void SX1262::setDio1Action(void (*cb)(void)) { g_dio1_cb = cb; }
 int16_t SX1262::startTransmit(uint8_t *, size_t len)
 {

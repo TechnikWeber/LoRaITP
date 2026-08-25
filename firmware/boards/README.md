@@ -15,7 +15,7 @@ miserable thing to debug.
 |---|---|---|---|
 | `heltec_v3.h` | documented, stable | documented, stable | documented |
 | `heltec_v4.h` | **copied from V3** | **copied from V3** | **copied from V3** |
-| `xiao_esp32s3_sense.h` | fixed by the XIAO edge pinout | **TODO — placeholder** | n/a |
+| `xiao_esp32s3_sense.h` | fixed by the XIAO edge pinout | **read off the module silkscreen** | n/a |
 | `xiao_nrf52840.h` | fixed by the XIAO edge pinout | **TODO — placeholder** | n/a |
 
 **Heltec V4** is stated by the vendor to keep the V3 form factor and pin
@@ -23,12 +23,32 @@ layout, so the map starts as a copy — but "pin compatible" on a product
 page is not the same as every GPIO landing in the same place, and it
 should be checked before first power-up.
 
-**The XIAO control pins are placeholders.** `NSS`, `RST`, `BUSY` and
-`DIO1` are marked `TODO` and currently hold arbitrary values. They must
-come from the Wio-SX1262 pinout for the exact variant you have, because
-Seeed sells two boards under the same name that use *different* pins:
-the Kit version over the B2B connector, and the non-Kit version over
-soldered headers. See [../../docs/hardware.md](../../docs/hardware.md).
+**The XIAO ESP32S3 Sense map is confirmed** against the silkscreen of a
+Wio-SX1262 for XIAO — the plug-on variant with two 7-pin sockets, not the
+Kit board that goes on the B2B connector:
+
+| Signal | XIAO | GPIO | | Signal | XIAO | GPIO |
+|---|---|---|---|---|---|---|
+| MOSI | D10 | 9 | | DIO1 | D1 | 2 |
+| MISO | D9 | 8 | | RST | D2 | 3 |
+| SCK | D8 | 7 | | BUSY | D3 | 4 |
+| | | | | NSS | D4 | 5 |
+| | | | | RF_SW | D5 | 6 |
+
+Two consequences worth carrying forward:
+
+* **`RF_SW` is a host-driven pin.** This module does not steer its
+  antenna switch from DIO2. `dio2_as_rf_switch` must be false and GPIO6
+  driven, or the radio transmits into a matched load and hears nothing.
+  The polarity used — high to transmit — is the convention rather than
+  something measured; if the link works one way only, invert it first.
+* **`RST` lands on GPIO3, which is the Sense SD card's chip select** on
+  the same SPI bus. Leave the card slot empty, or move `RST` to D0
+  (GPIO1) with a jumper. Images live in internal flash regardless.
+
+**The XIAO nRF52840 pins are still placeholders.** Its Wio-SX1262 uses
+through-hole headers and a different mapping again. See
+[../../docs/hardware.md](../../docs/hardware.md).
 
 Good sources, in order: the vendor schematic, Meshtastic's variant file
 for the board, RadioLib's examples. Not a forum post.
