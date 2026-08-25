@@ -17,12 +17,12 @@ whatever speed you like.
 
 ## Status
 
-Built and tested. 81 checks pass on the host under
+Built and tested. 85 checks pass on the host under
 `-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion` with no
 warnings, and clean under AddressSanitizer and UBSan:
 
 ```console
-$ cd tests && make run      # 81 passed, 0 failed
+$ cd tests && make run      # 85 passed, 0 failed
 $ cd tests && make san      # same, under ASan + UBSan
 ```
 

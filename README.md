@@ -14,7 +14,7 @@ gateway. A sender and a receiver that agree on a frequency are enough.
 > **Status: everything builds and passes; nothing has been on the air.**
 > The specification is complete and every number in it is computed rather
 > than estimated. A Python reference implementation runs full transfers
-> against a simulated channel, a portable C core passes 81 checks against
+> against a simulated channel, a portable C core passes 85 checks against
 > vectors generated from it, and the firmware builds for all three ESP32
 > targets — 43 % of flash, 38 % of RAM on the tightest of them. The next
 > step is two boards on a desk. See [the roadmap](#roadmap).
@@ -262,12 +262,12 @@ height and a clear line of sight, not on a bigger amplifier.
 $ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
                               # governor rules, feasibility property tests
 $ python3 sim/run.py          # 12 full transfers against simulated loss
-$ cd tests && make run        # 81 checks on the C core
+$ cd tests && make run        # 85 checks on the C core
 $ cd tests && make san        # the same, under ASan and UBSan
-$ cd tests && make port       # 23 checks on the RadioLib adapter
+$ cd tests && make port       # 24 checks on the RadioLib adapter
 $ cd tests && make store      # 37 checks on the image store, real files
 $ cd tests && make jpeg       # 13 checks on the JPEG encoder
-$ cd tests && make boards     # 22 checks on the board pin maps
+$ cd tests && make boards     # 29 checks on the board pin maps
 $ ./tests/test_jpeg /tmp/s && python3 tests/verify_jpeg.py /tmp/s
 ```
 
@@ -277,6 +277,31 @@ same state machine. Between them these have found four real bugs: two in
 the specification, one in the C core, one in the Python reference.
 [`sim/README.md`](sim/README.md) says which.
 
+### Where the gaps are
+
+The protocol core, the radio port, the image store, the JPEG encoder and
+the board pin maps all have tests. **The firmware's application layer —
+the loop in `firmware/app/main.cpp` — does not**, because it cannot be
+exercised without hardware.
+
+That matters, because three real bugs found during bring-up all lived
+exactly there, and none was visible to a compiler or to the existing
+tests: the core was correct and the application was correct, and they
+were wired together wrongly.
+
+* The duty-cycle window was rebuilt before every transfer, so each
+  session believed the whole hourly budget was untouched. On a band with
+  no limit this is invisible; on a 1 % or 10 % band it is an offence.
+  There is a regression test for it now.
+* The receiver applied the sender's interval to itself and went deaf
+  between listening windows, with no shared clock to say where the gap
+  would land.
+* The status page queried the duty-cycle window from the other core while
+  the radio was writing it.
+
+So if something behaves oddly on first power-up, that layer is the
+likeliest place, not the protocol.
+
 ## Roadmap
 
 - [x] Protocol specification v0.1
@@ -284,7 +309,7 @@ the specification, one in the C core, one in the Python reference.
 - [x] Repository skeleton and the core/port boundary
 - [x] Python reference implementation and channel simulator — 68 checks,
       12 transfer scenarios, no hardware
-- [x] Portable C core — 81 checks, warning-free, sanitizer-clean,
+- [x] Portable C core — 85 checks, warning-free, sanitizer-clean,
       3.9 kB of context and no allocation
 - [x] `port_radiolib.cpp` and pin maps — one adapter for all four boards,
       19 contract checks against a mocked RadioLib
