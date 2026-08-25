@@ -1,9 +1,14 @@
-# Base station — Linux receiver
+# Base station
+
+Either an ESP32 board with an OLED and an access point (Heltec V4 is the
+comfortable choice: 16 MB flash, status on the display), or a Linux host
+with an SX1262 on spidev.
 
 Mains powered, listens, reassembles, writes JPEGs.
 
-Uses `port/port_linux_spi.c` against an SX1262 on spidev — a Raspberry
-Pi with a LoRa HAT, or the same Heltec board acting as a USB modem.
+On Linux, `port/port_linux_spi.c` against an SX1262 on spidev — a
+Raspberry Pi with a LoRa HAT. On an ESP32 board, the same
+`port/port_radiolib.cpp` the node uses.
 
 ## Responsibilities
 

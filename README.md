@@ -122,7 +122,7 @@ tools/           calculators; every number in the docs comes from here
 sim/             Python reference implementation + channel simulator
 src/             portable C core   <- no platform headers, no malloc
 port/            platform shims    <- no protocol logic
-firmware/        node-heltec-v3 (sender), base-linux (receiver)
+firmware/        boards/ (pin maps), node/ (sender), base/ (receiver)
 tests/           core against the simulator, on the host
 ```
 
@@ -164,14 +164,22 @@ height and a clear line of sight, not on a bigger amplifier.
 
 ## Target hardware
 
-| Role | Hardware |
-|---|---|
-| Camera node | ESP32-S3 + SX1262 (Heltec WiFi LoRa 32 V3 or similar) + OV2640/OV5640 |
-| Base station | Same board, or an SX1262 HAT on a Raspberry Pi |
+| Board | MCU | Flash | Camera | WiFi |
+|---|---|---|---|---|
+| Heltec WiFi LoRa 32 V3 | ESP32-S3 | 8 MB | no | yes |
+| Heltec WiFi LoRa 32 V4 | ESP32-S3 | 16 MB + 2 MB PSRAM | no | yes |
+| Seeed XIAO ESP32S3 Sense | ESP32-S3 | 8 MB + 8 MB PSRAM | **included** | yes |
+| Seeed XIAO nRF52840 | nRF52840 | 1 MB + 2 MB QSPI | no | no |
 
-Nothing in the protocol is specific to these parts — it needs a LoRa
-radio with a 255-byte FIFO and a microcontroller with room for the
-image.
+The camera node wants the XIAO Sense, which ships with a plug-on OV2640;
+the base station is happiest on a Heltec V4. Storage is a non-issue on
+all of them — five images is under 2 % of the image store everywhere.
+[`docs/hardware.md`](docs/hardware.md) has the details, including a B2B
+connector clash worth knowing about before you order.
+
+Nothing in the protocol is specific to these parts. The core is C99 with
+no platform headers, which is why an nRF52840 needs a new `port/` rather
+than a new core.
 
 ---
 
@@ -184,8 +192,13 @@ image.
       12 transfer scenarios, no hardware
 - [x] Portable C core — 81 checks, warning-free, sanitizer-clean,
       3.9 kB of context and no allocation
-- [ ] ESP32-S3 / SX1262 sender firmware
-- [ ] Receiver + image reassembly on Linux
+- [ ] `port_radiolib.cpp` and pin maps — nothing runs on hardware until
+      this exists
+- [ ] Bench loopback on `EU868_G4_LP` (5 mW, no duty cycle: no budget
+      burnt, no licence needed)
+- [ ] LittleFS storage, camera pipeline, WiFi AP
+- [ ] Web flasher on GitHub Pages (WebSerial for the ESP32s, UF2 for the
+      nRF52840)
 - [ ] Camera and image pipeline: grayscale capture, software JPEG with
       chunk-aligned restart markers
 - [ ] Real-world range trial and a measured settings table
