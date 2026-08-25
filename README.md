@@ -11,9 +11,10 @@ away, and a regulatory airtime budget measured in seconds per hour.
 It runs directly on the LoRa PHY — no LoRaWAN, no network server, no
 gateway. A sender and a receiver that agree on a frequency are enough.
 
-> **Status: design phase.** The protocol specification is complete and
-> every timing number in it is computed, not estimated. Firmware is not
-> written yet. See [the roadmap](#roadmap).
+> **Status: design phase.** The specification is complete, every timing
+> number in it is computed rather than estimated, and a Python reference
+> implementation runs full transfers against a simulated channel. No
+> firmware yet. See [the roadmap](#roadmap).
 
 ---
 
@@ -96,6 +97,19 @@ Full details in **[SPEC.md](SPEC.md)**.
 
 ---
 
+## Try it
+
+```console
+$ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
+                              # governor rules, feasibility property tests
+$ python3 sim/run.py          # 12 full transfers against simulated loss
+```
+
+No dependencies, no hardware, no waiting — a transfer that takes four
+hours on a 1 % duty-cycle band runs here in under a second, using the
+same state machine. It has already found two bugs in the specification;
+[`sim/README.md`](sim/README.md) says which.
+
 ## Repository layout
 
 ```
@@ -162,9 +176,8 @@ image.
 - [x] Protocol specification v0.1
 - [x] Airtime, duty-cycle, energy and link-budget calculators
 - [x] Repository skeleton and the core/port boundary
-- [ ] Host-side reference implementation in Python, with a channel
-      simulator (loss, fading, collisions) so the state machine can be
-      tested without hardware or waiting for real airtime
+- [x] Python reference implementation and channel simulator — 68 checks,
+      12 transfer scenarios, no hardware
 - [ ] Portable C implementation of the core state machine
 - [ ] ESP32-S3 / SX1262 sender firmware
 - [ ] Receiver + image reassembly on Linux

@@ -402,15 +402,32 @@ should interleave deliberately.
 
 ### 5.5 Choosing r
 
-`parity_percent` is configured, and 0 is illegal in broadcast mode.
-Defaults:
+`parity_percent` is configured as a fraction of *k*, and 0 is illegal in
+broadcast mode.
+
+**The trap:** parity is a fraction of *k*, but what the code tolerates is
+`r / (k + r)` of the frames actually transmitted. 30 % parity therefore
+survives 23 % loss, not 30 %. Solving `r/(k+r) = L` gives:
+
+| Target loss | Required parity |
+|---|---|
+| 5 % | 5 % |
+| 10 % | 11 % |
+| 20 % | **25 %** |
+| 30 % | **43 %** |
+| 40 % | **67 %** |
+
+That is before any margin, and it is a break-even: at exactly the design
+loss rate the transfer succeeds about half the time. Apply a factor of
+about 1.5 to the loss estimate before reading the table.
 
 | Situation | Suggested `r` |
 |---|---|
 | interactive, return channel healthy | 0 — ARQ is cheaper |
 | interactive, expensive round trips | 10 % |
-| broadcast, link measured and good | 30 % |
-| broadcast, link unknown | 50–100 % |
+| broadcast, link measured at 10 % loss | 18 % |
+| broadcast, link measured at 20 % loss | 43 % |
+| broadcast, link unknown | 80–100 % |
 
 **Open question:** Reed–Solomon is fixed-rate — *r* must be chosen
 before the loss rate is known, which is precisely the situation
@@ -680,6 +697,14 @@ path, not on transmit power. See `tools/linkbudget.py`.
 Frame authentication is **AES-128-CMAC truncated to 4 bytes**, over a
 pre-shared 128-bit key, with the session `NONCE` from `META` prepended to
 the MAC input so a recorded session cannot be replayed into a later one.
+
+**`META` is the exception: it is authenticated under an all-zero nonce.**
+`META` is the frame that *delivers* the nonce, so a receiver verifying it
+does not have the nonce yet — the obvious construction is circular, and
+in the reference implementation it rejected every `META` before this was
+corrected. The nonce sits inside `META`'s own authenticated bytes, so a
+replayed `META` is bit-identical to the original; replay is caught by the
+receiver tracking recently seen `(IMG_ID, NONCE)` pairs instead.
 
 ### 11.1 What it is for
 
