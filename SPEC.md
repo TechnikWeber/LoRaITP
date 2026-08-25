@@ -80,18 +80,25 @@ SID:              session id, incremented per transfer, wraps at 256
 
 ### 3.2 `META` — transfer announcement
 
-Sent 1–3 times at the start of a session, always at the session's
-spreading factor.
+In interactive mode `META` is sent 1–3 times at the start of a session.
+In broadcast mode it is **repeated every 32 frames throughout the
+transmission** — it is the only frame that makes any of the others
+interpretable, and a one-way receiver that misses it, or that wakes up
+late, has no way to ask for it again.
 
 ```
  0      1      2      3      4      5      6      7      8      9
 +------+------+------+------+------+------+------+------+------+------+
 |CTRL  |SID   | IMG_ID      |LAYER | IMG_LEN            |CHUNK |CODEC |
 +------+------+------+------+------+------+------+------+------+------+
- 10     11     12     13     14     15     16     17     18
-+------+------+------+------+------+------+------+------+------+ - -
-| IMG_CRC32                 | WIDTH       | HEIGHT      |FLAGS | TLVs
-+------+------+------+------+------+------+------+------+------+ - -
+ 10     11     12     13     14     15     16     17     18     19
++------+------+------+------+------+------+------+------+------+------+
+| IMG_CRC32                 | WIDTH       | HEIGHT      |FLAGS |BLOCK |
++------+------+------+------+------+------+------+------+------+------+
+ 20     21     22     23     24     25
++------+------+------+------+------+------+ - -
+| NPARITY     | NONCE                     | TLVs ...
++------+------+------+------+------+------+ - -
 ```
 
 | Field | Size | Meaning |
@@ -103,11 +110,20 @@ spreading factor.
 | `CODEC` | 1 | 0 raw, 1 JPEG baseline, 2 JPEG with chunk-aligned restart markers, 3 grayscale JPEG, 4+ reserved |
 | `IMG_CRC32` | 4 | CRC-32 (IEEE 802.3, poly `0xEDB88320`) over the whole image |
 | `WIDTH` / `HEIGHT` | 2+2 | pixels, 0 if unknown |
-| `FLAGS` | 1 | bit0 `PARITY_PRESENT`, bit1 `ENCRYPTED`, bit2 `LAST_LAYER`, bit3 `AMATEUR_MODE`, bit4..7 reserved |
+| `FLAGS` | 1 | bit0 `PARITY_PRESENT`, bit1 `ENCRYPTED`, bit2 `LAST_LAYER`, bit3 `AMATEUR_MODE`, bit4 `BROADCAST`, bit5 `MAC_DATA`, bit6..7 reserved |
+| `BLOCK` | 1 | chunks per block; 0 means 256 |
+| `NPARITY` | 2 | parity chunks **per block**, 0 when FEC is off |
+| `NONCE` | 4 | random per session; replay protection for the MAC (§11) |
 
-The number of chunks is derived, never transmitted:
-`NCHUNKS = ceil(IMG_LEN / CHUNK)`, and
-`NBLOCKS = ceil(NCHUNKS / BLOCK_SIZE)`.
+`BLOCK` and `NPARITY` are transmitted rather than assumed because the
+broadcast receiver needs both to decide whether a transfer can still be
+recovered (§5.3). Derived, never transmitted:
+
+```
+NCHUNKS  = ceil(IMG_LEN / CHUNK)
+NBLOCKS  = ceil(NCHUNKS / BLOCK)
+frames   = NCHUNKS + NBLOCKS * NPARITY
+```
 
 Optional TLV extensions follow, each `TYPE(1) LEN(1) VALUE(LEN)`:
 
@@ -262,26 +278,147 @@ incomplete image is still delivered — see §7.
 
 ---
 
-## 5. Optional forward error correction
+## 5. Broadcast mode and forward error correction
 
-FEC is **off by default**. With a working return channel, ARQ is
-strictly cheaper: you retransmit exactly the lost chunks, whereas
-parity costs airtime on every transfer whether or not anything was lost.
+### 5.1 When there is no return channel
 
-FEC earns its place in two cases: a one-way link (no receiver
-transmitter at all), or a link whose round trip is so expensive that a
-repair round costs more than the parity would have.
+Interactive mode assumes the receiver can transmit. That assumption
+fails in real deployments: the receiver may be a listening station that
+is not licensed to transmit on that band, there may be many receivers
+for one sender, or the sender may simply be cheaper to build without a
+receive path at all.
 
-The defined profile is packet-level **Reed–Solomon over GF(256)**: for
-a block of *k* chunks the sender appends *r* parity chunks, and the
-receiver reconstructs the block from **any** *k* of the *k + r* chunks.
-Because the PHY CRC turns every corrupted frame into a clean erasure
-(you never receive a damaged chunk, you receive nothing), erasure
-decoding applies and *r* parity chunks recover exactly *r* losses.
+`LORAITP_MODE_BROADCAST` removes the return channel entirely. There is
+no `STAT`, no `FINACK`, no repair round. The sender emits the image plus
+parity and never learns whether any of it arrived.
 
-Recommended `r = ceil(0.15 × k)` for a link measured at <10 % loss.
+Three things change:
 
----
+1. **FEC becomes mandatory.** Without it a single lost frame is
+   unrecoverable.
+2. **`META` is repeated throughout**, every 32 frames, not just at the
+   start — see §3.2.
+3. **The transmission is self-describing in length.** `META` announces
+   `NCHUNKS` and `NPARITY`, so a receiver can compute exactly how many
+   frames the sender will send and how many are still to come. This is
+   what makes §5.3 possible.
+
+Frame order is **systematic first**: all source chunks of a block, then
+its parity. A receiver on a good link therefore has the whole image
+after the source chunks and can stop listening before the parity even
+starts, which on a battery-powered receiver is worth more than it
+sounds.
+
+### 5.2 The code
+
+Packet-level **Reed–Solomon over GF(256)**, systematic. For a block of
+*k* source chunks the sender appends *r* parity chunks, and the receiver
+reconstructs from **any** *k* of the *k + r*.
+
+Because the PHY CRC turns every corrupted frame into a clean erasure —
+you never receive a damaged chunk, you receive nothing — erasure
+decoding applies, and *r* parity chunks recover exactly *r* losses. This
+is far stronger than error correction over the same overhead.
+
+GF(256) constrains `k + r ≤ 255`, which is why the default block size
+drops from 256 to **128** when FEC is enabled, leaving room for up to
+100 % redundancy. Chunks within a block are zero-padded to equal length
+for coding purposes; the true image length comes from `IMG_LEN`.
+
+### 5.3 Knowing when to give up
+
+A broadcast receiver has exactly two decisions available: keep listening,
+or stop. Both are costly to get wrong — listening burns power, stopping
+early loses the image. With an erasure code the question is not a
+heuristic, it is **exactly decidable**.
+
+For each block, at any moment during the transmission:
+
+```
+achievable = received_distinct + (frames_for_block − frames_elapsed)
+
+if achievable < k:   the block can never be completed
+```
+
+No amount of further listening changes that, because every remaining
+frame is already counted in `achievable`. The receiver stops accounting
+for that block immediately.
+
+Two useful consequences:
+
+* **Early completion.** Once `received_distinct ≥ k` for every block, the
+  receiver decodes and powers down, even though the sender is still
+  transmitting parity it no longer needs.
+* **Early abandonment.** Once no block is still recoverable, the receiver
+  powers down instead of waiting out a session timeout that may be hours
+  long.
+
+Crucially, "unrecoverable" is not "worthless". Because the code is
+systematic, every source chunk that arrived is readable without
+decoding, and with chunk-aligned restart markers (§7) those chunks
+decode into a partial picture. A block that fails RS decoding still
+contributes its received strips. The receiver always writes out what it
+has.
+
+This is exposed as `loraitp_rx_still_recoverable()` and
+`loraitp_rx_progress()`.
+
+### 5.4 Why not just send the image three times
+
+Repetition is the obvious approach and it is strictly worse. Both
+options below cost the same airtime and the same energy —
+`tools/fec_compare.py` computes the comparison:
+
+| Packet loss | Send it 3× | k=52, r=104 erasure code |
+|---|---|---|
+| 2 % | 0.042 % fail | ~0 |
+| 5 % | 0.648 % fail | ~0 |
+| 10 % | **5.1 % fail** | ~0 |
+| 20 % | **34.1 % fail** | ~0 |
+| 30 % | **75.9 % fail** | ~0 |
+| 50 % | 99.9 % fail | 0.001 % fail |
+| 60 % | 100 % fail | 3.6 % fail |
+
+The reason is straightforward. Repetition requires *every specific*
+chunk to arrive at least once, so one unlucky chunk fails the whole
+image. An erasure code requires only that *enough* frames arrive, and
+does not care which — at 20 % loss the code needs 52 of 156 and receives
+about 125.
+
+Repetition's only real advantage is that it needs no decoder, and a
+systematic code takes even that away: the source chunks go out in the
+clear either way.
+
+There is one place repetition is right, and it is already in the
+design — `META` is repeated rather than coded, because it is the frame
+everything else depends on and it is too small to code usefully.
+
+**Time diversity still matters.** Fades are correlated in time, so
+parity sent immediately after its source chunks defends poorly against a
+30-second fade. The duty-cycle governor helps here by accident: on a 1 %
+band it spreads frames minutes apart, which is exactly the interleaving
+a burst-loss channel calls for. On an unrestricted band the sender
+should interleave deliberately.
+
+### 5.5 Choosing r
+
+`parity_percent` is configured, and 0 is illegal in broadcast mode.
+Defaults:
+
+| Situation | Suggested `r` |
+|---|---|
+| interactive, return channel healthy | 0 — ARQ is cheaper |
+| interactive, expensive round trips | 10 % |
+| broadcast, link measured and good | 30 % |
+| broadcast, link unknown | 50–100 % |
+
+**Open question:** Reed–Solomon is fixed-rate — *r* must be chosen
+before the loss rate is known, which is precisely the situation
+broadcast mode is in. A rateless code (RaptorQ, or an LT code) would let
+the sender simply emit parity until its airtime budget runs out, with no
+prior guess. That is a materially better fit, at the cost of
+considerably more code and a patent history worth checking. It is the
+strongest candidate for v0.2.
 
 ## 6. Regulatory profile — the duty-cycle governor
 
@@ -307,21 +444,50 @@ numbers in §8 so different from the raw airtime numbers.
 
 ### 6.2 Defined regions
 
-| Profile | Band | Duty | Max power | Notes |
-|---|---|---|---|---|
-| `EU868_G1` | 868.0–868.6 MHz | 1 % | 14 dBm ERP | the LoRaWAN default channels, busy |
-| `EU868_G2` | 868.7–869.2 MHz | 0.1 % | 14 dBm ERP | too narrow a budget for images |
-| `EU868_G3` | 869.4–869.65 MHz | **10 %** | **27 dBm ERP** | the best ISM choice for this protocol |
-| `EU868_G4` | 869.7–870.0 MHz | 1 % | 14 dBm ERP | |
-| `EU433` | 433.05–434.79 MHz | 10 % | 10 dBm ERP | low power, but a quiet band |
-| `US915` | 902–928 MHz | none | 30 dBm | 400 ms dwell-time limit per frame instead |
-| `AMATEUR` | per licence | **none** | per licence | see §6.4 |
-| `TEST_UNRESTRICTED` | — | none | — | shielded-chamber / dummy-load only |
+Verified against the German allocation **BNetzA Vfg. 91/2025**
+(November 2025, valid to 31.12.2035), Table 2. That document defines the
+duty cycle as `Σ(Ton)/Tobs` with `Tobs` a **rolling one-hour window**,
+which is what the governor implements.
 
-`EU868_G3` deserves emphasis: it gives **ten times the airtime budget
-and 13 dB more power** than the channels most LoRa projects default to.
-For a protocol whose entire problem is airtime, that is the single
-largest lever available without an amateur licence.
+| Profile | Band | Duty | Max power | Vfg. row |
+|---|---|---|---|---|
+| **`EU868_G3`** | **869.4–869.65 MHz** | **10 %** | **500 mW ERP** | 54 |
+| `EU868_G1` | 868.0–868.6 MHz | 1 % | 25 mW ERP | 48 |
+| `EU868_G2` | 868.7–869.2 MHz | 0.1 % | 25 mW ERP | 50 |
+| `EU868_G4` | 869.7–870.0 MHz | 1 % | 25 mW ERP | 56b |
+| `EU868_G4_LP` | 869.7–870.0 MHz | **none** | 5 mW ERP | 56a |
+| `EU433` | 433.05–434.79 MHz | 10 % | 10 mW ERP | 44b |
+| `EU433_NARROW` | 434.04–434.79 MHz | **none**, BW ≤ 25 kHz | 10 mW ERP | 45c |
+| `AMATEUR` | per licence | none | per licence | §6.4 |
+| `TEST_UNRESTRICTED` | — | none | — | dummy load / simulator only |
+
+**`EU868_G3` is the default.** It is the row that makes this protocol
+practical without a licence: *"Geräte mit geringer Reichweite für nicht
+näher spezifizierte Anwendungen, 500 mW (ERP) … Alternativ,
+Arbeitszyklus: ≤ 10 %"*. Compared with the 868.1/868.3/868.5 MHz
+channels that every LoRa library ships preconfigured, it gives **ten
+times the airtime budget and 13 dB more transmit power**, and unlike the
+alarm-system rows in the same range it carries **no channel bandwidth
+restriction**, so a 125 kHz LoRa channel fits.
+
+The alternative to the duty cycle in rows 48, 50, 54 and 56b is
+"Anforderungen an Frequenzzugangs- und Störungsminderungstechniken",
+i.e. listen-before-talk with adaptive frequency agility. LoRaITP does not
+implement LBT and therefore always takes the duty-cycle option.
+
+Two rows are worth knowing about even though they are not the default:
+
+* **`EU868_G4_LP` — 5 mW with no duty-cycle limit at all.** Twenty dB
+  less power than g3, but unlimited airtime. For bench work, short-range
+  integration testing and protocol debugging on real radios, this is the
+  right profile: it burns no budget and needs no licence.
+* **`EU433_NARROW` — unlimited duty cycle at ≤ 25 kHz bandwidth.** The
+  SX1262 supports 20.83 kHz, so this is usable, though the narrow
+  bandwidth makes it very slow and demands a good crystal.
+
+> These figures are the German implementation. Other CEPT countries
+> follow the same ETSI basis but verify before deploying, and note that
+> sub-band definitions have changed between revisions.
 
 ### 6.3 Budget accounting
 
@@ -509,13 +675,79 @@ path, not on transmit power. See `tools/linkbudget.py`.
 
 ---
 
-## 11. Open points for v0.2
+## 11. Authentication
 
-* Whether authentication (a CMAC without encryption) is acceptable in
-  the amateur service — it does not obscure meaning, but the question
-  deserves a proper answer before it goes in the spec.
-* Multiple senders to one receiver: currently only avoidable by
-  scheduling. A slotted TDMA profile is the obvious extension.
-* Whether `PARITY` should use RaptorQ (rateless, better for one-way)
-  instead of Reed–Solomon (simpler, fixed rate).
-* A compressed `STAT` encoding for very high loss rates.
+Frame authentication is **AES-128-CMAC truncated to 4 bytes**, over a
+pre-shared 128-bit key, with the session `NONCE` from `META` prepended to
+the MAC input so a recorded session cannot be replayed into a later one.
+
+### 11.1 What it is for
+
+The interesting threat here is not an attacker. It is **the neighbours**.
+869.4–869.65 MHz is a shared band, and any other device using the same
+spreading factor and sync word will hand LoRaITP well-formed-looking
+frames that happen to be someone else's traffic. A 4-byte MAC discards
+them at essentially no cost, which is a more likely everyday benefit
+than defence against malice.
+
+Where malice does matter, it matters in the control plane, not the bulk
+data:
+
+| Forged frame | Consequence |
+|---|---|
+| `STAT` claiming "complete" | the image is silently lost |
+| `STAT` claiming "everything missing" | the sender burns its **entire daily budget** on retransmission |
+| `ABORT` | the session dies |
+| `META` | the receiver misinterprets everything that follows |
+
+Those are cheap attacks with expensive outcomes, and airtime is the
+scarcest resource in the system.
+
+### 11.2 What is authenticated by default
+
+**Control frames — on by default.** `META`, `EOB`, `STAT`, `FIN`,
+`FINACK`, `PROBE`, `PROBEACK` and `ABORT` carry a MAC. They are rare and
+small, so the cost is negligible.
+
+**`DATA` frames — off by default.** A 4-byte MAC doubles the bulk header
+from 4 to 8 bytes, taking overhead from 2 % to 4 % of the entire
+transfer. It buys little in interactive mode: the image CRC-32 already
+detects a forged chunk end-to-end, and an adversary who can inject
+frames can also simply jam, which no MAC prevents.
+
+**Exception — `PARITY` frames in broadcast mode should be
+authenticated.** A forged parity chunk corrupts the Reed–Solomon decode
+across a whole block, so it does more damage than a forged source chunk,
+and there is no repair round to recover from it. Set `MAC_DATA` when
+broadcasting.
+
+### 11.3 Authentication is not encryption
+
+`ENCRYPTED` and the MAC are separate flags for a reason. A CMAC appended
+to a plaintext frame does not obscure the meaning of the transmission —
+the content is fully readable by anyone — it only proves who sent it.
+On that basis LoRaITP permits authentication in amateur mode and enables
+it by default, while encryption remains hard-disabled there (§6.4).
+
+Operators should satisfy themselves that this reading matches their own
+regulator's position; `key_present = false` disables it entirely.
+
+## 12. Open points for v0.2
+
+* **A rateless code instead of Reed–Solomon.** See §5.5 — fixed-rate
+  coding forces a guess about the loss rate at exactly the moment we
+  have no feedback about it.
+* **Multiple senders to one receiver**, currently avoidable only by
+  scheduling them at different times of day. A slotted TDMA profile is
+  the obvious extension; it needs a time source, and GPS costs power
+  while a free-running RTC drifts.
+* **A compressed `STAT` encoding for very high loss rates.** At 40 %
+  loss a bitmap is mostly ones and a run-length form would be smaller —
+  which is exactly when saving airtime matters most.
+* **Session resumption.** If a transfer fails at 80 %, should tomorrow
+  resume it or start a fresh picture? Probably an application policy,
+  but the protocol must not preclude it.
+* **Listen-before-talk** as an alternative to the duty cycle, which the
+  allocation explicitly permits and which would lift the airtime cap
+  entirely on g3. Materially harder to get right than duty-cycle
+  accounting, and easy to get wrong in a way that is invisible.

@@ -24,31 +24,63 @@ At a 1 % duty cycle, every second on air buys 99 seconds of silence.
 
 ## The sub-bands, and the one everybody forgets
 
-| Sub-band | Range | Duty | Max power |
-|---|---|---|---|
-| g1 | 868.0–868.6 MHz | 1 % | 14 dBm ERP |
-| g2 | 868.7–869.2 MHz | 0.1 % | 14 dBm ERP |
-| **g3** | **869.4–869.65 MHz** | **10 %** | **27 dBm ERP** |
-| g4 | 869.7–870.0 MHz | 1 % | 14 dBm ERP |
+Verified against **BNetzA Vfg. 91/2025** (November 2025, valid to
+31.12.2035), Table 2 — the German implementation of the harmonised
+SRD allocation.
+
+| Row | Band | Category | Power | Duty |
+|---|---|---|---|---|
+| 48 | 868.0–868.6 MHz | nicht näher spezifizierte Anwendungen | 25 mW ERP | ≤ 1 % |
+| 50 | 868.7–869.2 MHz | nicht näher spezifizierte Anwendungen | 25 mW ERP | ≤ 0.1 % |
+| **54** | **869.4–869.65 MHz** | **nicht näher spezifizierte Anwendungen** | **500 mW ERP** | **≤ 10 %** |
+| 56a | 869.7–870.0 MHz | nicht näher spezifizierte Anwendungen | 5 mW ERP | **none** |
+| 56b | 869.7–870.0 MHz | nicht näher spezifizierte Anwendungen | 25 mW ERP | ≤ 1 % |
+| 44b | 433.05–434.79 MHz | nicht näher spezifizierte Anwendungen | 10 mW ERP | ≤ 10 % |
+| 45c | 434.04–434.79 MHz | nicht näher spezifizierte Anwendungen | 10 mW ERP | **none**, BW ≤ 25 kHz |
+
+Rows 48, 50, 54 and 56b state the duty cycle as the *alternative* to
+"Anforderungen an Frequenzzugangs- und Störungsminderungstechniken",
+i.e. listen-before-talk with adaptive frequency agility. LoRaITP does
+not implement LBT and always takes the duty-cycle option.
+
+Vfg. 91/2025 also fixes the definition that the governor implements:
+
+> ‚Arbeitszyklus' ist das in Prozent ausgedrückte Verhältnis von
+> Σ(Ton)/(Tobs) … Sofern in den Tabellen 2 und 3 nicht anders bestimmt,
+> ist Tobs ein fortlaufender Zeitraum von einer Stunde.
+
+A **rolling** one-hour window, not a calendar hour — which is why the
+governor keeps a sliding window rather than resetting a counter.
+
+### Row 54 is the one that matters
 
 Most LoRa projects use 868.1 / 868.3 / 868.5 MHz, because those are the
 LoRaWAN default channels and every library ships with them configured.
-All three sit in g1: 1 % duty, 14 dBm.
+All three sit in row 48: 1 % duty, 25 mW.
 
-**g3 gives ten times the airtime budget and 13 dB more transmit power.**
-For a protocol whose entire problem is airtime, and whose secondary
-problem is range, this is the largest single improvement available
-without a licence — and it costs nothing but a configuration change.
+**Row 54 gives ten times the airtime budget and 13 dB more transmit
+power** — and, unlike the alarm-system rows in the same range, it
+carries **no channel bandwidth restriction**, so a 125 kHz LoRa channel
+fits. For a protocol whose entire problem is airtime and whose secondary
+problem is range, this is the largest improvement available without a
+licence, and it costs a configuration change.
 
-The trade-off is that g3 is only 250 kHz wide, which fits one 125 kHz
-LoRa channel comfortably and two at a squeeze. It is a shared band, and
-it is also where LoRaWAN puts its RX2 downlink at 869.525 MHz, so it is
-not empty. For a point-to-point link that transmits for an hour a day,
-that is an acceptable neighbourhood.
+It is not empty: 869.525 MHz is where LoRaWAN puts its RX2 downlink. For
+a point-to-point link transmitting for an hour a day, that is an
+acceptable neighbourhood — and it is an argument for the frame
+authentication in SPEC.md §11, which discards the neighbours' traffic
+cheaply.
 
-> Verify the current allocation and its conditions against the ETSI
-> standard and your national regulator before deploying. Sub-band
-> definitions have changed between revisions of EN 300 220.
+### Two rows worth knowing about
+
+**Row 56a — 5 mW with no duty-cycle limit at all.** Twenty dB less power
+than row 54, but unlimited airtime. For bench work and protocol
+debugging on real radios this is the right profile: it burns no budget
+and needs no licence. `EU868_G4_LP`.
+
+**Row 45c — unlimited duty cycle at ≤ 25 kHz bandwidth.** The SX1262
+supports 20.83 kHz, so it is usable, though the narrow bandwidth is slow
+and demands a good crystal. `EU433_NARROW`.
 
 ## What this means for images
 
@@ -105,3 +137,12 @@ simulator — not for an antenna. The planned host-side simulator is the
 better answer for almost all development work: it runs the full state
 machine at any speed you like, with configurable loss and fading, and
 uses no airtime whatsoever.
+
+---
+
+## Sources
+
+- Bundesnetzagentur, *Allgemeinzuteilung von Frequenzen zur Nutzung durch
+  Geräte geringer Reichweite (SRD)*, Vfg. 91/2025, November 2025 —
+  Table 2, rows 44b, 45c, 48, 50, 54, 56a, 56b, and the `Arbeitszyklus`
+  definition on page 3.

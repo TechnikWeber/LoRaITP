@@ -58,10 +58,12 @@ trip, not fifty.
 
 **A duty-cycle governor that is part of the protocol.** Every
 transmission is granted by a budget accountant before it happens. There
-is no code path that transmits without asking. It knows the EU
-sub-bands, including `EU868_G3` (869.4–869.65 MHz) which allows **ten
-times the airtime and 13 dB more power** than the LoRaWAN default
-channels most projects reach for.
+is no code path that transmits without asking. The regional profiles are
+taken from the published allocation — for Germany, BNetzA Vfg. 91/2025 —
+rather than from folklore, and the default is `EU868_G3`
+(869.4–869.65 MHz, row 54): **ten times the airtime budget and 13 dB
+more power** than the LoRaWAN default channels most projects reach for,
+with no bandwidth restriction to get in the way.
 
 **An amateur-radio mode that takes its obligations seriously.** Licensed
 operators can lift the duty-cycle limit. In exchange the stack *enforces*
@@ -69,6 +71,15 @@ what the amateur service requires: a call sign must be configured or it
 refuses to transmit, identification frames are injected automatically
 during long transfers, and encryption is switched off and cannot be
 switched back on.
+
+**A broadcast mode for links with no return channel.** The receiver may
+be unable to transmit, or unwilling, or there may be many of them. The
+sender then emits the image plus Reed–Solomon parity and never learns
+what arrived — and the receiver can decide *exactly*, not heuristically,
+whether the image is still recoverable, so it powers down the moment it
+provably is not. Sending the image three times instead costs the same
+airtime and fails 34 % of the time at 20 % packet loss, where the code
+fails essentially never.
 
 **Images that degrade instead of failing.** With JPEG restart markers
 aligned to chunk boundaries, a transfer that dies at 90 % yields 90 % of
@@ -85,9 +96,26 @@ Full details in **[SPEC.md](SPEC.md)**.
 
 ---
 
+## Repository layout
+
+```
+SPEC.md          the wire format — normative
+tools/           calculators; every number in the docs comes from here
+sim/             Python reference implementation + channel simulator
+src/             portable C core   <- no platform headers, no malloc
+port/            platform shims    <- no protocol logic
+firmware/        node-heltec-v3 (sender), base-linux (receiver)
+tests/           core against the simulator, on the host
+```
+
+The boundary between `src/` and `port/` is the one that matters, and it
+is enforced by directory rather than convention — see
+[CONTRIBUTING.md](CONTRIBUTING.md). It is what lets the same core object
+code run in tests, in the simulator and on hardware.
+
 ## Tools
 
-Two calculators, no dependencies beyond the Python standard library.
+Three calculators, no dependencies beyond the Python standard library.
 
 ```console
 $ python3 tools/airtime.py
@@ -102,6 +130,10 @@ $ python3 tools/linkbudget.py --dist 30 --freq 868 --erp 27
 
   1st Fresnel zone radius at midpoint     50.9 m
   earth bulge at midpoint (k=4/3)         13.2 m
+
+$ python3 tools/fec_compare.py
+  loss | P(fail) repetition | P(fail) erasure code
+    20% |            34.142% |                    0
 ```
 
 That second output is the most useful thing in this repository. Over
@@ -129,14 +161,15 @@ image.
 
 - [x] Protocol specification v0.1
 - [x] Airtime, duty-cycle, energy and link-budget calculators
+- [x] Repository skeleton and the core/port boundary
 - [ ] Host-side reference implementation in Python, with a channel
       simulator (loss, fading, collisions) so the state machine can be
       tested without hardware or waiting for real airtime
 - [ ] Portable C implementation of the core state machine
 - [ ] ESP32-S3 / SX1262 sender firmware
 - [ ] Receiver + image reassembly on Linux
-- [ ] Camera and image pipeline: grayscale JPEG with chunk-aligned
-      restart markers
+- [ ] Camera and image pipeline: grayscale capture, software JPEG with
+      chunk-aligned restart markers
 - [ ] Real-world range trial and a measured settings table
 
 ## Prior art

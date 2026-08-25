@@ -84,12 +84,12 @@ size. A transfer that ends 90 % complete then produces 90 % of the
 picture instead of a decoder error. For a link that will sometimes fail
 halfway, this changes the character of the whole system.
 
-**Open question:** whether the OV2640's hardware JPEG encoder exposes a
-usable restart-interval register through the ESP32 camera driver, or
-whether the image must be re-encoded in software on the ESP32-S3 to get
-chunk-aligned markers. Re-encoding costs energy and time, but both are
-cheap compared with an hour of airtime. This needs to be checked against
-real hardware before the image pipeline is designed.
+This question used to be "does the OV2640's hardware encoder expose a
+usable restart-interval register?". It is now moot: the pipeline
+captures raw grayscale and encodes JPEG in software on the S3, which
+costs a few hundred milliseconds against a transmission of tens of
+minutes and gives full control over grayscale, quality and `DRI`. See
+[camera.md](camera.md).
 
 ## Why FEC is off by default
 
@@ -128,12 +128,18 @@ towards caution.
 
 ## Open questions for the specification
 
-**Authentication in amateur mode.** Encryption is clearly not permitted.
-A CMAC appended to a plaintext message does not obscure the meaning of
-the transmission, so it is arguably fine, and it would prevent a third
-party injecting frames into a session. But "arguably" is not good enough
-for something the spec makes normative. This deserves a proper answer
-rather than a guess.
+**Authentication is now specified** (SPEC.md §11) and on by default for
+control frames. The reasoning that settled it: the most valuable thing a
+MAC does here is not defeating an attacker but discarding *the
+neighbours* — 869.4 MHz is shared, and another device on the same SF and
+sync word delivers well-formed frames that are not ours. Where malice
+does matter it matters in the control plane: a forged `STAT` claiming
+"everything missing" makes the sender burn its entire daily budget.
+
+It stays off for bulk `DATA` frames, because 4 bytes on every chunk
+takes overhead from 2 % to 4 % of the whole transfer to detect something
+the image CRC-32 already catches — and an adversary who can inject can
+also jam, which no MAC prevents.
 
 **Multiple senders.** The current design is point-to-point and handles
 several nodes only by scheduling them at different times of day, which
