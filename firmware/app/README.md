@@ -1,34 +1,67 @@
-# Camera node
+# `app/` — the node firmware
 
-Builds for every target in [`../boards/`](../boards/README.md).
-The camera node itself wants a board with a camera interface, which
-means the XIAO ESP32S3 Sense — see [../../docs/hardware.md](../../docs/hardware.md).
+One binary for both ends of the link. Which end a board is is a stored
+setting, not a build flag, so there is one firmware to build, one to
+flash, and a base station can be turned into a second node from a phone
+with no toolchain anywhere near it. A board with a camera defaults to
+sending; one without defaults to listening.
 
-The battery end: wake, capture, encode, transmit, sleep.
-
-PlatformIO, one environment per board. The radio sits on RadioLib
-through a single `port/port_radiolib.cpp`, so four boards need four pin
-maps rather than four drivers. All protocol behaviour lives in `src/`.
-
-## Pipeline
-
-```
-RTC alarm -> camera on -> capture RGB565 -> JPEG encode -> LoRaITP -> deep sleep
+```console
+$ cd firmware
+$ pio run -e xiao_esp32s3_sense -t upload
+$ pio device monitor
 ```
 
-The JPEG encoding is done in software on the S3 rather than by the
-camera's own encoder. That costs a few hundred milliseconds and some
-PSRAM, against a transmission measured in tens of minutes — and it buys
-the three things that actually matter for airtime: grayscale output, a
-quality setting we choose, and a restart interval aligned to the chunk
-size so a partial transfer still decodes. See
-[docs/camera.md](../../docs/camera.md).
+| File | What it does |
+|---|---|
+| `main.cpp` | setup, the schedule, and the sender/receiver dispatch |
+| `appcfg.cpp` | settings in NVS: role, region, radio, budget, AP behaviour |
+| `camera.cpp` | grayscale capture on the XIAO Sense |
+| `jpeg.c` | grayscale baseline JPEG encoder with restart markers |
+| `webui.cpp` | access point, image gallery, settings page |
 
-## Hardware
+## Two things worth knowing before the first upload
 
-Settled: mount the radio on a camera board rather than a camera on a
-radio board. The XIAO ESP32S3 Sense ships with a plug-on OV2640, so the
-hard half is already done — but its camera and the *Kit* version of the
-Wio-SX1262 compete for the same B2B connector, so the radio has to be
-the non-Kit variant on the edge pins.
-See [../../docs/hardware.md](../../docs/hardware.md).
+**It starts on `EU868_G4_LP`** — 869.85 MHz at 5 mW, the sub-band with no
+duty-cycle limit at all. It burns none of the daily budget and needs no
+licence, so a hundred transfers cost an afternoon rather than a week. Move
+to `EU868_G3` from the settings page once the link works. A default that
+cannot get anyone into trouble is worth more than a fast one.
+
+**The access point is on and stays on.** WiFi draws 100–150 mA
+continuously — more than the SX1262 while transmitting at +22 dBm — so
+that is not the long-term answer for a battery node. The auto-off is
+built and selectable on the settings page; it defaults to off, because a
+bench board whose network keeps vanishing is a nuisance and the power
+only matters in the field.
+
+The web server runs pinned to the second core. A receive session blocks
+for minutes at a time, and an access point that stops answering for the
+length of a transfer is worse than none.
+
+## The image pipeline
+
+```
+capture PIXFORMAT_GRAYSCALE 320x240      76.8 kB
+  -> loraitp_jpeg_encode_to_budget()     ~4-8 kB
+  -> store on LittleFS                   ring of N
+  -> LoRaITP session                     the core reads it back
+```
+
+Grayscale is chosen, not a limitation: for "what does the camera see"
+chroma is the first thing to spend, and it halves the frame buffer as
+well. The encoder aims at a *byte budget* rather than a quality number,
+because the duty cycle constrains bytes.
+
+The restart interval is one MCU row. Markers cannot be aligned to chunk
+boundaries — `DRI` counts MCUs and the compressed size of an interval
+varies — but one per row costs about 1 % of the file and cuts the damage
+from a lost packet from 72 rows to 16. See
+[../../docs/camera.md](../../docs/camera.md).
+
+## Status
+
+Compiles and is contract-tested on a host; **not yet run on hardware.**
+The XIAO pin map is read off the module silkscreen and the `RF_SW`
+polarity is the convention rather than a measurement — if the link works
+in one direction only, that is the first thing to invert.

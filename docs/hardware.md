@@ -12,14 +12,15 @@
 | `port_sim.c` — in-memory radio for tests | done |
 | `port_radiolib.cpp` — SX1262 on ESP32 and nRF52840 | written, 19 contract checks; never built against real RadioLib |
 | `loraitp_store.c` — LittleFS image store | written, 37 checks against real files |
-| **Camera capture and JPEG encode** | **not written** |
-| **WiFi AP and web UI** | **not written** |
-| **Application: schedule, sleep, board pin maps** | **not written** |
+| `jpeg.c` + `camera.cpp` — grayscale capture and encode | written; encoder verified against an independent decoder |
+| `webui.cpp` — access point, gallery, settings | written |
+| `main.cpp` — schedule, roles, pin maps | written |
+| **A build against the real toolchain** | **in progress** |
+| **Anything on actual hardware** | **not done** |
 
-The core is the hard, fiddly, easy-to-get-subtly-wrong part, and it is
-finished and tested. What remains is mostly plumbing — but it is real
-work, and flashing two boards today would get you nothing but a blinking
-LED.
+Everything above the radio is written and tested on a host. What has not
+happened is a board being switched on, and until that has, treat the
+firmware as a well-argued draft rather than something that works.
 
 ## The boards
 
