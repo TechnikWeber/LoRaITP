@@ -128,6 +128,18 @@ int main(void)
         check(mock_rfsw_tx() == 6 && mock_rfsw_rx() == RADIOLIB_NC,
               "a single RF_SW pin is driven high to transmit");
 
+        /*
+         * The inverted case matters as much as the default: which slot
+         * the pin occupies IS the polarity, and getting it wrong gives a
+         * radio that hears nothing while looking perfectly configured.
+         */
+        c2.rf_sw_inverted = true;
+        memset(&p2, 0, sizeof(p2));
+        loraitp_radiolib_attach(&p2, &c2);
+        check(mock_rfsw_rx() == 6 && mock_rfsw_tx() == RADIOLIB_NC,
+              "inverting RF_SW swaps which phase drives it high");
+        c2.rf_sw_inverted = false;
+
         /* Two separate lines. */
         c2.pin_rf_sw = LORAITP_PIN_NONE;
         c2.pin_rx_en = 4; c2.pin_tx_en = 5;

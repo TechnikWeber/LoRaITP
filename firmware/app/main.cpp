@@ -157,7 +157,10 @@ void setup(void)
     if (LORAITP_BOARD.lora_ant_sw != LORAITP_PIN_NONE) {
         r.dio2_as_rf_switch = false;
         r.pin_rf_sw = LORAITP_BOARD.lora_ant_sw;
-        Serial.printf("RF switch driven on GPIO%u\n", LORAITP_BOARD.lora_ant_sw);
+        r.rf_sw_inverted = cfg.rf_sw_invert;
+        Serial.printf("RF switch on GPIO%u, high to %s\n",
+                      LORAITP_BOARD.lora_ant_sw,
+                      cfg.rf_sw_invert ? "receive (inverted)" : "transmit");
     }
 
     rc = loraitp_radiolib_attach(&port, &r);

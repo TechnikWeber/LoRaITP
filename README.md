@@ -99,24 +99,112 @@ Full details in **[SPEC.md](SPEC.md)**.
 
 ---
 
-## Try it
+## Getting started
 
-```console
-$ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
-                              # governor rules, feasibility property tests
-$ python3 sim/run.py          # 12 full transfers against simulated loss
-$ cd tests && make run        # 81 checks on the C core
-$ cd tests && make san        # the same, under ASan and UBSan
-$ cd tests && make port       # 23 checks on the RadioLib adapter
-$ cd tests && make store      # 37 checks on the image store, real files
-$ cd tests && make jpeg       # 13 checks on the JPEG encoder
-$ ./tests/test_jpeg /tmp/s && python3 tests/verify_jpeg.py /tmp/s
-```
+> **Read this first.** The protocol is finished and heavily tested; the
+> firmware compiles and passes its tests on a computer, but **no board has
+> ever been switched on**. You would be the first. Expect to debug
+> something.
 
-No dependencies, no hardware, no waiting — a transfer that takes four
-hours on a 1 % duty-cycle band runs here in under a second, using the
-same state machine. It has already found two bugs in the specification;
-[`sim/README.md`](sim/README.md) says which.
+You need two boards. They run the **same firmware** — which end of the
+link a board is is a setting, not a separate build.
+
+### What to buy
+
+| Role | Board | Note |
+|---|---|---|
+| Camera node | **Seeed XIAO ESP32S3 Sense** + **Wio-SX1262 for XIAO** | the Sense includes the camera |
+| Base station | **Heltec WiFi LoRa 32 V3 or V4** | no camera needed at this end |
+
+Get antennas for the right band and **screw them on before powering
+anything up**. Transmitting without an antenna can damage the radio.
+
+> One trap worth knowing: Seeed sells two boards called *Wio-SX1262 for
+> XIAO*. The **Kit** version plugs into the flat connector underneath the
+> XIAO — the same one the camera uses, and it shares GPIOs with the camera
+> as well, so it cannot be combined with the Sense. You want the one with
+> two 7-pin sockets that the XIAO plugs into from above.
+
+### Wiring the camera node
+
+If the XIAO with its camera board attached fits into the radio board's
+sockets, just plug it in — done. If it fouls mechanically, use jumper
+leads instead; the wiring is identical either way:
+
+| Radio board | XIAO pin |
+|---|---|
+| 3V3, GND | 3V3, GND |
+| MOSI, MISO, SCK | D10, D9, D8 |
+| DIO1 | D1 |
+| RST | D2 |
+| BUSY | D3 |
+| NSS | D4 |
+| RF_SW | D5 |
+
+**Leave the microSD slot empty.** The radio's reset line lands on the same
+pin as the card's chip select, and a card in the slot will corrupt every
+radio read. Pictures are stored in the board's own flash — several hundred
+of them fit — so the card is not needed.
+
+### Flashing
+
+Open **[the flasher page](https://technikweber.github.io/LoRaITP/flash/)**
+in Chrome, Edge or Opera, plug the board in over USB, pick your board,
+click Install. That is the whole procedure — no software to install.
+
+Firefox and Safari cannot do this: flashing over USB needs an API they
+have both declined to implement. There is nothing to enable, you need a
+different browser.
+
+If the board does not appear in the list of ports, hold its BOOT button
+while plugging the USB cable in.
+
+### First run
+
+1. On your phone or laptop, connect to the WiFi network **`LoRaITP-XXXX`**
+   that the board creates.
+2. Open **`http://192.168.4.1`**. You will see the image gallery, the
+   status page and the settings.
+3. On the **camera node**, set the role to **Sender**. Leave the other
+   board on **Receiver**. (A board with a camera already defaults to
+   Sender, so you may not need to change anything.)
+4. Wait. Within a few minutes the receiver's gallery should show a
+   picture.
+
+The boards start on **869.85 MHz at 5 mW** — the sub-band that has no
+airtime limit at all, so you can experiment as much as you like without
+using up any budget and without needing a licence. Range will be short.
+Once it works, switch both boards to `EU868_G3` on the settings page for
+500 mW and real distance, and read
+[docs/duty-cycle.md](docs/duty-cycle.md) first.
+
+### If nothing arrives
+
+**Change the antenna-switch setting first.** On the settings page, under
+*Antenna switch*, pick the other option and save. This is the single most
+likely cause: the radio module has a pin that steers its antenna between
+transmit and receive, and which way round it goes is not documented for
+this module. With it wrong, the board transmits into a dead end and hears
+nothing — which looks exactly like being out of range. Flipping it takes
+a tap; ruling it out any other way takes an afternoon.
+
+If that does not help:
+
+- Are both boards on the **same frequency and spreading factor**? Check
+  the status page on each.
+- Are the **antennas** attached?
+- Is one board set to **Sender** and the other to **Receiver**?
+- Plug the sender into USB and open a serial monitor at 115200 baud. It
+  prints what it is doing, including any configuration the firmware
+  refused and why.
+
+### A note on the radio rules
+
+The firmware will not let you transmit outside the limits of whichever
+region you select — wrong frequency, too much power, or amateur mode
+without a call sign, and it refuses and says so rather than transmitting.
+That is deliberate. It is an aid, though, not a guarantee: it cannot know
+your antenna gain or your local rules, and staying legal remains yours.
 
 ## Repository layout
 
@@ -167,26 +255,25 @@ height and a clear line of sight, not on a bigger amplifier.
 
 ---
 
-## Target hardware
+## Running the tests
 
-| Board | MCU | Flash | Camera | WiFi |
-|---|---|---|---|---|
-| Heltec WiFi LoRa 32 V3 | ESP32-S3 | 8 MB | no | yes |
-| Heltec WiFi LoRa 32 V4 | ESP32-S3 | 16 MB + 2 MB PSRAM | no | yes |
-| Seeed XIAO ESP32S3 Sense | ESP32-S3 | 8 MB + 8 MB PSRAM | **included** | yes |
-| Seeed XIAO nRF52840 | nRF52840 | 1 MB + 2 MB QSPI | no | no |
+```console
+$ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
+                              # governor rules, feasibility property tests
+$ python3 sim/run.py          # 12 full transfers against simulated loss
+$ cd tests && make run        # 81 checks on the C core
+$ cd tests && make san        # the same, under ASan and UBSan
+$ cd tests && make port       # 23 checks on the RadioLib adapter
+$ cd tests && make store      # 37 checks on the image store, real files
+$ cd tests && make jpeg       # 13 checks on the JPEG encoder
+$ ./tests/test_jpeg /tmp/s && python3 tests/verify_jpeg.py /tmp/s
+```
 
-The camera node wants the XIAO Sense, which ships with a plug-on OV2640;
-the base station is happiest on a Heltec V4. Storage is a non-issue on
-all of them — five images is under 2 % of the image store everywhere.
-[`docs/hardware.md`](docs/hardware.md) has the details, including a B2B
-connector clash worth knowing about before you order.
-
-Nothing in the protocol is specific to these parts. The core is C99 with
-no platform headers, which is why an nRF52840 needs a new `port/` rather
-than a new core.
-
----
+No dependencies, no hardware, no waiting — a transfer that takes four
+hours on a 1 % duty-cycle band runs here in under a second, using the
+same state machine. Between them these have found four real bugs: two in
+the specification, one in the C core, one in the Python reference.
+[`sim/README.md`](sim/README.md) says which.
 
 ## Roadmap
 

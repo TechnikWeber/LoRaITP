@@ -70,6 +70,7 @@ async function load(){
     ['Airtime used (rolling hour)',s.used_ms+' ms'],
     ['Airtime budget',s.budget_ms?s.budget_ms+' ms':'no limit'],
     ['Bytes still allowed today',s.bytes_left],
+    ['RF switch',s.rfsw],
     ['Last result',s.last||'-'],['Uptime',Math.round(s.uptime/1000)+' s']];
   document.getElementById('stat').innerHTML=
     rows.map(r=>`<tr><th>${r[0]}</th><td>${r[1]}</td></tr>`).join('');
@@ -202,7 +203,9 @@ static void h_status(void)
     j += ",\"used_ms\":";     j += s.airtime_used_ms;
     j += ",\"budget_ms\":";   j += s.airtime_budget_ms;
     j += ",\"bytes_left\":";  j += s.bytes_remaining;
-    j += ",\"uptime\":";      j += millis();
+    j += ",\"rfsw\":\"";
+    j += g_cfg->rf_sw_invert ? "high=RX (inverted)" : "high=TX";
+    j += "\",\"uptime\":";  j += millis();
     j += ",\"last\":\"";      j += s.last_result;
     j += "\"}";
     g_server.send(200, "application/json", j);
@@ -297,6 +300,7 @@ static void h_settings_post(void)
     if (g_server.hasArg("iv"))     c.interval_s = (uint32_t)g_server.arg("iv").toInt();
     if (g_server.hasArg("budget")) c.image_budget = (uint16_t)g_server.arg("budget").toInt();
     if (g_server.hasArg("keep"))   c.keep_images = (uint16_t)g_server.arg("keep").toInt();
+    if (g_server.hasArg("rfinv"))  c.rf_sw_invert = g_server.arg("rfinv").toInt() != 0;
     if (g_server.hasArg("call"))
         snprintf(c.callsign, sizeof(c.callsign), "%s",
                  g_server.arg("call").c_str());

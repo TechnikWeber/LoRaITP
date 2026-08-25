@@ -32,6 +32,7 @@ void loraitp_cfg_defaults(loraitp_appcfg_t *c, bool board_has_camera)
     c->tx_power_dbm = 7;
     c->parity_percent = 0;
     c->broadcast = false;
+    c->rf_sw_invert = false;      /* high to transmit, the convention */
 
     c->interval_s = 300;             /* every five minutes while testing */
     c->image_budget = 8000;
@@ -59,6 +60,7 @@ void loraitp_cfg_load(loraitp_appcfg_t *c, bool board_has_camera)
     c->tx_power_dbm = (int8_t)p.getChar("pwr", c->tx_power_dbm);
     c->parity_percent = p.getUChar("parity", c->parity_percent);
     c->broadcast = p.getBool("bcast", c->broadcast);
+    c->rf_sw_invert = p.getBool("rfinv", c->rf_sw_invert);
 
     c->interval_s = p.getULong("interval", c->interval_s);
     c->image_budget = p.getUShort("budget", c->image_budget);
@@ -83,6 +85,7 @@ void loraitp_cfg_save(const loraitp_appcfg_t *c)
     p.putChar("pwr", c->tx_power_dbm);
     p.putUChar("parity", c->parity_percent);
     p.putBool("bcast", c->broadcast);
+    p.putBool("rfinv", c->rf_sw_invert);
     p.putULong("interval", c->interval_s);
     p.putUShort("budget", c->image_budget);
     p.putUShort("keep", c->keep_images);

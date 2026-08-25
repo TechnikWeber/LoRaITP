@@ -51,6 +51,18 @@ typedef struct {
     uint8_t pin_rf_sw;               /* LORAITP_PIN_NONE if unused */
     uint8_t pin_rx_en, pin_tx_en;    /* LORAITP_PIN_NONE if unused */
 
+    /*
+     * Which way round the single RF_SW line goes. False (the default)
+     * drives it high to transmit, which is the usual convention - but it
+     * is a convention, not something measured on any particular module.
+     *
+     * Wrong, the radio transmits into a matched load and hears nothing,
+     * which looks exactly like being out of range. It is a one-flag fix
+     * and the application exposes it, so a first power-up that hears
+     * nothing costs a tap rather than an afternoon.
+     */
+    bool    rf_sw_inverted;
+
     bool    tcxo;
     float   tcxo_voltage;
 

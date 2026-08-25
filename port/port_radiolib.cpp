@@ -320,6 +320,7 @@ extern "C" void loraitp_radiolib_defaults(loraitp_radiolib_cfg_t *cfg)
     cfg->pin_nss = cfg->pin_dio1 = cfg->pin_rst = cfg->pin_busy = LORAITP_PIN_NONE;
     cfg->pin_sck = cfg->pin_miso = cfg->pin_mosi = LORAITP_PIN_NONE;
     cfg->pin_rf_sw = LORAITP_PIN_NONE;
+    cfg->rf_sw_inverted = false;
     cfg->pin_rx_en = cfg->pin_tx_en = LORAITP_PIN_NONE;
 
     cfg->dio2_as_rf_switch = true;      /* true for most SX1262 modules */
@@ -390,16 +391,19 @@ extern "C" int loraitp_radiolib_attach(loraitp_port_t *port,
         }
     } else if (cfg->pin_rf_sw != LORAITP_PIN_NONE) {
         /*
-         * One line, driven high to transmit. RadioLib raises txEn during
-         * transmit and rxEn during receive, so passing the pin as txEn
-         * with no rxEn gives exactly that.
+         * One line. RadioLib raises txEn while transmitting and rxEn
+         * while receiving, so which slot the pin goes in *is* the
+         * polarity: as txEn it is high to transmit, as rxEn it is high to
+         * receive.
          *
-         * The polarity is the convention, not something measured on this
-         * module. If the link works in one direction only, invert it here
-         * first - it is a one-line change and by far the most likely
-         * cause.
+         * Default is high-to-transmit, the usual convention - but a
+         * convention rather than a measurement, so rf_sw_inverted exists
+         * and the settings page exposes it.
          */
-        radio.setRfSwitchPins(RADIOLIB_NC, cfg->pin_rf_sw);
+        if (cfg->rf_sw_inverted)
+            radio.setRfSwitchPins(cfg->pin_rf_sw, RADIOLIB_NC);
+        else
+            radio.setRfSwitchPins(RADIOLIB_NC, cfg->pin_rf_sw);
     } else if (cfg->pin_rx_en != LORAITP_PIN_NONE
                || cfg->pin_tx_en != LORAITP_PIN_NONE) {
         radio.setRfSwitchPins(cfg->pin_rx_en, cfg->pin_tx_en);

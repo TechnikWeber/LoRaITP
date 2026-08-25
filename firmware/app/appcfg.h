@@ -45,6 +45,17 @@ typedef struct {
     uint8_t  parity_percent;
     bool     broadcast;
 
+    /*
+     * Antenna-switch polarity for modules that bring RF_SW out to a pin,
+     * like the Seeed Wio-SX1262. False drives it high to transmit.
+     *
+     * This is on the settings page rather than buried in a header because
+     * the wrong value is invisible: the radio configures cleanly and
+     * simply never hears anything. Being able to flip it in the field
+     * turns a lost afternoon into a tap.
+     */
+    bool     rf_sw_invert;
+
     /* Capture and schedule. */
     uint32_t interval_s;         /* between transfers */
     uint16_t image_budget;       /* bytes; 0 = ask the duty-cycle governor */
