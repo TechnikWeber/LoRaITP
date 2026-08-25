@@ -26,13 +26,13 @@ jobs:
       - name: build every target
         working-directory: firmware
         run: |
-          for e in heltec_v3 heltec_v4 xiao_esp32s3_sense; do
+          for e in heltec_v3 heltec_v4 xiao_esp32s3_sense xiao_esp32s3_kit; do
             pio run -e "$e"
           done
 
       - name: collect binaries
         run: |
-          for e in heltec_v3 heltec_v4 xiao_esp32s3_sense; do
+          for e in heltec_v3 heltec_v4 xiao_esp32s3_sense xiao_esp32s3_kit; do
             mkdir -p "docs/flash/$e"
             b="firmware/.pio/build/$e"
             cp "$b/firmware.bin" "$b/bootloader.bin" "$b/partitions.bin" \

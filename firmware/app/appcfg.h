@@ -35,6 +35,7 @@ typedef struct {
     bool     ap_auto_off;        /* default false */
     uint16_t ap_timeout_s;       /* how long without traffic before it drops */
     char     ap_password[24];    /* empty = open network */
+    bool     captive_portal;     /* pop the page up automatically */
 
     /* Radio. Defaults to EU868_G4_LP: 5 mW, no duty-cycle limit, no
      * licence needed - the right place to develop. */
@@ -55,6 +56,15 @@ typedef struct {
      * turns a lost afternoon into a tap.
      */
     bool     rf_sw_invert;
+
+    /* Radio detail. Left out of the first version because the defaults
+     * are right for almost everyone - but "almost" is why they are here. */
+    uint32_t bandwidth_hz;       /* 125000, 250000, 62500, 20830 */
+    uint8_t  coding_rate;        /* 1..4 for 4/5 .. 4/8 */
+    uint8_t  sync_word;          /* 0x12 private, 0x34 is LoRaWAN's */
+
+    /* 0 off, 1 normal, 2 every frame. */
+    uint8_t  log_level;
 
     /* Capture and schedule. */
     uint32_t interval_s;         /* between transfers */

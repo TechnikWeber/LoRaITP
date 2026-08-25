@@ -49,11 +49,13 @@ typedef struct {
 #  include "heltec_v4.h"
 #elif defined(LORAITP_BOARD_XIAO_ESP32S3_SENSE)
 #  include "xiao_esp32s3_sense.h"
+#elif defined(LORAITP_BOARD_XIAO_ESP32S3_KIT)
+#  include "xiao_esp32s3_kit.h"
 #elif defined(LORAITP_BOARD_XIAO_NRF52840)
 #  include "xiao_nrf52840.h"
 #else
 #  error "Define one of LORAITP_BOARD_HELTEC_V3, _HELTEC_V4, \
-_XIAO_ESP32S3_SENSE, _XIAO_NRF52840"
+_XIAO_ESP32S3_SENSE, _XIAO_ESP32S3_KIT, _XIAO_NRF52840"
 #endif
 
 #endif /* LORAITP_BOARD_H */

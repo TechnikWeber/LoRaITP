@@ -73,6 +73,39 @@ typedef enum {
 
 /* --------------------------------------------------------- session */
 
+/* ------------------------------------------------------------- tracing */
+
+/*
+ * An optional window into what the radio is doing, frame by frame.
+ *
+ * Without it the only visible sign of a session is its result, which is
+ * no help at all when the answer is "nothing arrived" - the interesting
+ * question is then whether anything was heard, and that is a per-frame
+ * question. The callback is small, synchronous, and called from inside
+ * the session, so an implementation must not block: append to a ring
+ * buffer and return.
+ */
+typedef enum {
+    LORAITP_EV_TX = 1,        /* a frame left the antenna */
+    LORAITP_EV_RX,            /* a frame arrived and verified */
+    LORAITP_EV_RX_TIMEOUT,    /* a listening window closed empty */
+    LORAITP_EV_MAC_REJECT,    /* a frame failed its MAC - or was not ours */
+    LORAITP_EV_DUTY_WAIT,     /* the governor made us wait */
+    LORAITP_EV_ROUND          /* a repair round finished */
+} loraitp_event_t;
+
+typedef struct {
+    uint8_t  ev;              /* loraitp_event_t */
+    uint8_t  frame_type;      /* LORAITP_DATA, LORAITP_STAT, ... */
+    uint16_t seq;             /* chunk index, or block for EOB/STAT */
+    uint8_t  len;             /* bytes on the wire */
+    int16_t  rssi_dbm;
+    int8_t   snr_qdb;
+    uint32_t value;           /* wait in ms, or chunks still missing */
+} loraitp_trace_t;
+
+typedef void (*loraitp_trace_cb)(void *user, const loraitp_trace_t *t);
+
 /* Config flags */
 #define LORAITP_CFG_ENCRYPTED (1u << 0)   /* refused in amateur mode */
 #define LORAITP_CFG_MAC_DATA  (1u << 1)   /* authenticate bulk frames too */
@@ -112,6 +145,10 @@ typedef struct {
      */
     uint8_t *fec_scratch;
     size_t   fec_scratch_len;
+
+    /* Optional; NULL disables tracing entirely, at no cost. */
+    loraitp_trace_cb trace;
+    void            *trace_user;
 } loraitp_session_cfg_t;
 
 typedef struct {

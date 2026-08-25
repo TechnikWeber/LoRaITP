@@ -58,7 +58,7 @@ jobs:
         # xiao_nrf52840 is deliberately absent: the core and the port
         # compile for it, but the application needs WiFi, NVS and a
         # filesystem the part does not have. See firmware/platformio.ini.
-        env: [heltec_v3, heltec_v4, xiao_esp32s3_sense]
+        env: [heltec_v3, heltec_v4, xiao_esp32s3_sense, xiao_esp32s3_kit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -18,6 +18,7 @@ void loraitp_cfg_defaults(loraitp_appcfg_t *c, bool board_has_camera)
     c->ap_auto_off = false;          /* see the note in appcfg.h */
     c->ap_timeout_s = 300;
     c->ap_password[0] = '\0';
+    c->captive_portal = true;
 
     /*
      * EU868_G4_LP - 869.7-870.0 MHz, 5 mW, no duty-cycle limit
@@ -33,6 +34,11 @@ void loraitp_cfg_defaults(loraitp_appcfg_t *c, bool board_has_camera)
     c->parity_percent = 0;
     c->broadcast = false;
     c->rf_sw_invert = false;      /* high to transmit, the convention */
+
+    c->bandwidth_hz = 125000u;
+    c->coding_rate = 1;           /* 4/5 */
+    c->sync_word = 0x12;          /* private; 0x34 would be LoRaWAN's */
+    c->log_level = 1;
 
     c->interval_s = 300;             /* every five minutes while testing */
     c->image_budget = 8000;
@@ -53,6 +59,7 @@ void loraitp_cfg_load(loraitp_appcfg_t *c, bool board_has_camera)
     c->ap_auto_off = p.getBool("ap_off", c->ap_auto_off);
     c->ap_timeout_s = p.getUShort("ap_to", c->ap_timeout_s);
     p.getString("ap_pw", c->ap_password, sizeof(c->ap_password));
+    c->captive_portal = p.getBool("cportal", c->captive_portal);
 
     c->region = p.getUChar("region", c->region);
     c->frequency_hz = p.getULong("freq", c->frequency_hz);
@@ -61,6 +68,10 @@ void loraitp_cfg_load(loraitp_appcfg_t *c, bool board_has_camera)
     c->parity_percent = p.getUChar("parity", c->parity_percent);
     c->broadcast = p.getBool("bcast", c->broadcast);
     c->rf_sw_invert = p.getBool("rfinv", c->rf_sw_invert);
+    c->bandwidth_hz = p.getULong("bw", c->bandwidth_hz);
+    c->coding_rate = p.getUChar("cr", c->coding_rate);
+    c->sync_word = p.getUChar("sync", c->sync_word);
+    c->log_level = p.getUChar("log", c->log_level);
 
     c->interval_s = p.getULong("interval", c->interval_s);
     c->image_budget = p.getUShort("budget", c->image_budget);
@@ -79,6 +90,7 @@ void loraitp_cfg_save(const loraitp_appcfg_t *c)
     p.putBool("ap_off", c->ap_auto_off);
     p.putUShort("ap_to", c->ap_timeout_s);
     p.putString("ap_pw", c->ap_password);
+    p.putBool("cportal", c->captive_portal);
     p.putUChar("region", c->region);
     p.putULong("freq", c->frequency_hz);
     p.putUChar("sf", c->spreading_factor);
@@ -86,6 +98,10 @@ void loraitp_cfg_save(const loraitp_appcfg_t *c)
     p.putUChar("parity", c->parity_percent);
     p.putBool("bcast", c->broadcast);
     p.putBool("rfinv", c->rf_sw_invert);
+    p.putULong("bw", c->bandwidth_hz);
+    p.putUChar("cr", c->coding_rate);
+    p.putUChar("sync", c->sync_word);
+    p.putUChar("log", c->log_level);
     p.putULong("interval", c->interval_s);
     p.putUShort("budget", c->image_budget);
     p.putUShort("keep", c->keep_images);

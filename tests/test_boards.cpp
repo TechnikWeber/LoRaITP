@@ -66,6 +66,10 @@ typedef ::loraitp_board_t loraitp_board_t;
 #undef XIAO_D10
 #undef XIAO_D11
 #undef XIAO_D12
+namespace xiao_kit {
+typedef ::loraitp_board_t loraitp_board_t;
+#include "xiao_esp32s3_kit.h"
+}
 namespace xiao_nrf52840 {
 typedef ::loraitp_board_t loraitp_board_t;
 #include "xiao_nrf52840.h"
@@ -118,6 +122,7 @@ int main(void)
     one(heltec_v3::LORAITP_BOARD);
     one(heltec_v4::LORAITP_BOARD);
     one(xiao_esp32s3::LORAITP_BOARD);
+    one(xiao_kit::LORAITP_BOARD);
     one(xiao_nrf52840::LORAITP_BOARD);
 
     /* The XIAO's radio reset shares GPIO3 with the Sense SD card's chip
@@ -127,6 +132,14 @@ int main(void)
           "XIAO RST is on GPIO3, the pin the SD card also uses");
     check(xiao_esp32s3::LORAITP_BOARD.lora_ant_sw == 6,
           "XIAO RF_SW is on GPIO6 and must be driven");
+
+    /* The Kit radio sits where the camera would; the two cannot coexist
+     * and the header must not claim otherwise. */
+    check(!xiao_kit::LORAITP_BOARD.has_camera,
+          "the Kit board declares no camera - it occupies that connector");
+    check(xiao_kit::LORAITP_BOARD.lora_busy == 40
+          && xiao_kit::LORAITP_BOARD.lora_dio1 == 39,
+          "Kit control pins are on the B2B GPIOs, not the edge");
 
     printf("\n%d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;

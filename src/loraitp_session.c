@@ -124,6 +124,22 @@ size_t loraitp_fec_session_scratch(uint16_t k, uint16_t r, uint16_t chunk_len)
 
 /* ----------------------------------------------------------- plumbing */
 
+static void trace(loraitp_ctx_t *c, uint8_t ev, uint8_t ftype, uint16_t seq,
+                  uint8_t len, int16_t rssi, int8_t snr, uint32_t value)
+{
+    if (c->cfg.trace == NULL)
+        return;
+    loraitp_trace_t t;
+    t.ev = ev;
+    t.frame_type = ftype;
+    t.seq = seq;
+    t.len = len;
+    t.rssi_dbm = rssi;
+    t.snr_qdb = snr;
+    t.value = value;
+    c->cfg.trace(c->cfg.trace_user, &t);
+}
+
 static bool mac_data(const loraitp_ctx_t *c)
 {
     return (c->cfg.flags & LORAITP_CFG_MAC_DATA) != 0;
@@ -170,8 +186,10 @@ static int transmit(loraitp_ctx_t *c, size_t len, int depth)
                                               c->cfg.coding_rate, 8) / 1000u;
     uint32_t now = p->now_ms(p->ctx);
     uint32_t wait = loraitp_gov_delay_ms(&c->gov, now, toa_est);
-    if (wait)
+    if (wait) {
+        trace(c, LORAITP_EV_DUTY_WAIT, 0, 0, 0, 0, 0, wait);
         p->sleep_ms(p->ctx, wait);
+    }
 
     uint32_t toa_ms = toa_est;
     int rc = p->radio_send(p->ctx, c->txbuf, (uint8_t)len, &toa_ms);
@@ -181,6 +199,11 @@ static int transmit(loraitp_ctx_t *c, size_t len, int depth)
     loraitp_gov_record(&c->gov, p->now_ms(p->ctx), toa_ms);
     c->stats.airtime_ms += toa_ms;
     c->stats.frames_tx++;
+
+    int ft = loraitp_frame_type(c->txbuf, len);
+    uint16_t sq = (len >= 4) ? (uint16_t)(c->txbuf[2] | (c->txbuf[3] << 8)) : 0;
+    trace(c, LORAITP_EV_TX, (uint8_t)(ft < 0 ? 0 : ft), sq, (uint8_t)len,
+          0, 0, toa_ms);
     return LORAITP_OK;
 }
 
@@ -191,8 +214,11 @@ static int receive(loraitp_ctx_t *c, uint32_t timeout_ms,
     const loraitp_port_t *p = c->port;
     int n = p->radio_receive(p->ctx, c->rxbuf, sizeof(c->rxbuf),
                              timeout_ms, meta);
-    if (n <= 0)
+    if (n <= 0) {
+        if (n == 0)
+            trace(c, LORAITP_EV_RX_TIMEOUT, 0, 0, 0, 0, 0, timeout_ms);
         return (n == 0) ? LORAITP_E_TIMEOUT : n;
+    }
 
     int body = loraitp_unseal(p, c->nonce, mac_data(c), c->rxbuf, (size_t)n);
     if (body < 0) {
@@ -200,11 +226,18 @@ static int receive(loraitp_ctx_t *c, uint32_t timeout_ms,
          * traffic on a shared band, or a forgery. Either way the frame
          * simply did not arrive. */
         c->stats.mac_rejects++;
+        trace(c, LORAITP_EV_MAC_REJECT, 0, 0, (uint8_t)n,
+              meta ? meta->rssi_dbm : 0, meta ? meta->snr_qdb : 0, 0);
         return LORAITP_E_TIMEOUT;
     }
     *out_len = (size_t)body;
     c->stats.frames_rx++;
-    return loraitp_frame_type(c->rxbuf, (size_t)body);
+
+    int ft = loraitp_frame_type(c->rxbuf, (size_t)body);
+    uint16_t sq = (body >= 4) ? (uint16_t)(c->rxbuf[2] | (c->rxbuf[3] << 8)) : 0;
+    trace(c, LORAITP_EV_RX, (uint8_t)(ft < 0 ? 0 : ft), sq, (uint8_t)body,
+          meta ? meta->rssi_dbm : 0, meta ? meta->snr_qdb : 0, 0);
+    return ft;
 }
 
 /* ------------------------------------------------------------- sender */
@@ -378,6 +411,7 @@ int loraitp_send_image(loraitp_ctx_t *c, const loraitp_image_desc_t *desc,
                 if (round > 0) c->stats.retransmits++;
             }
             c->stats.rounds++;
+            trace(c, LORAITP_EV_ROUND, 0, b, 0, 0, 0, n_todo);
 
             bool got_stat = false;
             for (uint8_t retry = 0; retry < c->cfg.eob_retry && !got_stat;
