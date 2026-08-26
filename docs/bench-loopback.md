@@ -149,37 +149,60 @@ at all means the failure is a setting rather than the board.
 
 ## 3. Set the roles
 
-On each board, **Settings** → **Role**:
+**Nothing is waiting for you to choose.** Every board boots with a role
+already decided and starts working about three seconds later: one with a
+camera defaults to **Sender**, one without to **Receiver**. You are
+correcting a default, not switching the board on.
 
-* one board **Sender**,
-* the other **Receiver**.
+Which means:
 
-A board with a camera already defaults to Sender and a board without to
-Receiver, so a Heltec–XIAO Sense pair may need no change at all. Two
-Heltecs will both have defaulted to Receiver — one of them has to be
-told otherwise.
+* **Heltec + XIAO Sense** — already right. Sense sends, Heltec listens.
+  Change nothing.
+* **Two Heltecs** — both defaulted to Receiver, so both are politely
+  listening and nobody is transmitting. One of them has to be told
+  otherwise, and this is the only step that is genuinely required.
 
-Saving restarts the board. That is expected, and the duty-cycle window
+**Settings** → **Role** → **Sender**, save. The board restarts; the role
+is stored in flash and survives every restart from then on, so this is
+once and not again.
+
+Saving restarts the board, which is expected — and the duty-cycle window
 survives it.
 
 ## 4. The transfer
 
-**Order matters.** The receiver listens in ten-minute windows, back to
-back, so it must be running first. The sender fires once about three
-seconds after boot and then not again for twenty-four hours — the
-schedule now defaults to one picture a day, which is right for a mast
-and useless for a desk.
+Both halves are automatic. What they are not is *synchronised*, and that
+is the whole of what you have to get right.
 
-So:
+**The receiver needs nothing at all, ever.** It listens in ten-minute
+windows, back to back, from three seconds after boot until it loses
+power. There is no schedule on that side and no button to press — the
+two ends have no common clock, so a receiver that listened on a timer
+would be deaf whenever the gap happened to land. Leave it alone.
 
-1. Make sure the **receiver** is powered and its status page says it is
-   listening.
-2. On the **sender**, press **Send / listen now** at the top of the page.
-3. Watch the **Live log** on both.
+**The sender transmits once about three seconds after every boot**, and
+then once per interval — which now defaults to twenty-four hours. So a
+restart gives you a transfer; the next automatic one is tomorrow.
 
-Do not shorten the interval to force repeats. **Send / listen now** is
-what that button is for, and a short interval on a duty-limited band
-later is a mistake you would have to remember to undo.
+Which gives two ways to run a test, both fine:
+
+* **Press "Send / listen now"** on the sender's main page. This is the
+  one to use for repeats.
+* **Or just restart the sender** — the Reboot button, or saving any
+  setting. Three seconds later it transmits by itself.
+
+Either way, make sure the **receiver is powered first**. If it is not
+listening when the sender goes, the transfer is simply lost — nothing
+breaks, you just press the button again.
+
+Then watch the **Live log** on both.
+
+> On a receiver the button does nothing useful, despite its label: the
+> board never stops listening, so there is nothing to bring forward.
+
+Do not shorten the interval to force repeats. The button is what that is
+for, and a short interval on a duty-limited band later is a mistake you
+would have to remember to undo.
 
 ## 5. What a good run looks like
 

@@ -176,9 +176,12 @@ while plugging the USB cable in.
    status page and the settings.
 3. On the **camera node**, set the role to **Sender**. Leave the other
    board on **Receiver**. (A board with a camera already defaults to
-   Sender, so you may not need to change anything.)
-4. Wait. Within a few minutes the receiver's gallery should show a
-   picture.
+   Sender, so you may not need to change anything. Two boards without a
+   camera both default to Receiver, and one of them has to be told
+   otherwise.)
+4. Wait. The sender transmits about three seconds after every boot, so
+   the receiver's gallery should show a picture within a couple of
+   minutes. The receiver listens continuously and needs no prompting.
 5. The schedule ships at **one transfer every 24 hours** — the
    one-picture-a-day case the airtime table above is about. A first
    transfer runs a few seconds after boot, so you do not wait a day to
