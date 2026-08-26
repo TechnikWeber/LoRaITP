@@ -1,6 +1,6 @@
 {
   "name": "LoRaITP (xiao_esp32s3_kit)",
-  "version": "0.2.1-alpha",
+  "version": "0.2.2-alpha",
   "new_install_prompt_erase": true,
   "builds": [
     {
