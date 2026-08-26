@@ -297,7 +297,11 @@ code run in tests, in the simulator and on hardware.
 
 ## Tools
 
-Three calculators, no dependencies beyond the Python standard library.
+Three calculators and a consistency check, no dependencies beyond the
+Python standard library. `check_flash_manifest.py` is the odd one out: it
+compares the web flasher's manifests against the partition tables,
+because those describe the same flash layout in two files that nothing
+else connects.
 
 ```console
 $ python3 tools/airtime.py
@@ -332,6 +336,7 @@ height and a clear line of sight, not on a bigger amplifier.
 $ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
                               # governor rules, feasibility property tests
 $ python3 sim/run.py          # 12 full transfers against simulated loss
+$ python3 tools/check_flash_manifest.py   # flasher vs. partition tables
 $ cd tests && make run        # 109 checks on the C core
 $ cd tests && make san        # the same, under ASan and UBSan
 $ cd tests && make port       # 24 checks on the RadioLib adapter
@@ -368,6 +373,11 @@ were wired together wrongly.
   would land.
 * The status page queried the duty-cycle window from the other core while
   the radio was writing it.
+* The web flasher wrote the application to the Arduino default address
+  while the partition table put it somewhere else, so a flashed board
+  could not boot. Everything built, every test passed, the flasher
+  reported success. `tools/check_flash_manifest.py` now compares the two
+  on every push.
 * A radio setting the driver refused — 27 dBm, which the 500 mW ERP limit
   on `EU868_G3` invites and the SX1262 will not do — killed the firmware
   before the web server started, so the only way to undo it was a USB

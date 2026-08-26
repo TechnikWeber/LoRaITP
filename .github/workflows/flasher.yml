@@ -23,6 +23,9 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install platformio
 
+      - name: manifests match the partition tables
+        run: python3 tools/check_flash_manifest.py
+
       - name: build every target
         working-directory: firmware
         run: |

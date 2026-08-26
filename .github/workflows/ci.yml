@@ -21,6 +21,12 @@ jobs:
           python3 tools/fec_compare.py
           python3 tools/storage.py
 
+      # The flasher manifests and the partition tables describe the same
+      # layout in two files that nothing connects. Out of step, everything
+      # still builds and the board does not boot.
+      - name: flasher manifests match the partition tables
+        run: python3 tools/check_flash_manifest.py
+
       # The reference implementation is the executable form of SPEC.md.
       - name: python reference and simulator
         run: |
