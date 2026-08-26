@@ -1,6 +1,6 @@
 {
   "name": "LoRaITP (heltec_v4)",
-  "version": "0.1.0-alpha",
+  "version": "0.1.1-alpha",
   "new_install_prompt_erase": true,
   "builds": [
     {
