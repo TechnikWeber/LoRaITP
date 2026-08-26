@@ -368,7 +368,7 @@ void setup(void)
      *
      * So the page comes up, says what the radio refused, and lets it be
      * corrected. This is the same shape as the governor refusal below;
-     * the two behave alike now because they are the same kind of
+     * the two now behave alike because they are the same kind of
      * mistake.
      */
     bool radio_up = (loraitp_radiolib_attach(&port, &r) == LORAITP_OK);
@@ -592,8 +592,24 @@ static void run_sender(loraitp_ctx_t *ctx)
 
     LOG("sending %d B", n);
     uint32_t t0 = millis();
+
+    /*
+     * The core fills these on every path it finishes, but it has two it
+     * does not: a port that fails validation, and an image_begin that
+     * refuses - a full filesystem, most plausibly. Both return before
+     * writing a byte here, and reading the stack that was left behind
+     * put invented frame counts on the status page and "sent 8000 B" in
+     * a line where nothing had been sent. The page exists to be believed.
+     */
     loraitp_stats_t st;
+    memset(&st, 0, sizeof(st));
     int rc = loraitp_send_image(ctx, &d, &st);
+    if (rc != LORAITP_OK) {
+        snprintf(last_result, sizeof(last_result),
+                 "send refused (error %d) after %u frames", rc, st.frames_tx);
+        LOG("%s", last_result);
+        return;
+    }
 
     LOG("sent: rc %d, %u frames, %u ms airtime, %u round(s), %u ms wall",
         rc, st.frames_tx, st.airtime_ms, st.rounds, millis() - t0);
@@ -606,12 +622,24 @@ static void run_sender(loraitp_ctx_t *ctx)
 
 static void run_receiver(loraitp_ctx_t *ctx)
 {
+    /* Zeroed for the same reason the sender's are: the core has an
+     * early return that writes none of them, and a sidecar assembled
+     * from whatever was on the stack is worse than no sidecar. */
     loraitp_image_desc_t d;
-    loraitp_rx_result_t result;
+    loraitp_rx_result_t result = LORAITP_RX_TIMEOUT;
     loraitp_stats_t st;
+    memset(&d, 0, sizeof(d));
+    memset(&st, 0, sizeof(st));
 
     LOG("listening...");
     int rc = loraitp_receive_image(ctx, &d, &result, &st);
+    if (rc != LORAITP_OK) {
+        snprintf(last_result, sizeof(last_result),
+                 "receive refused (error %d)", rc);
+        LOG("%s - the radio or the port is not usable", last_result);
+        delay(1000);          /* do not spin on a fault that will persist */
+        return;
+    }
     if (result == LORAITP_RX_TIMEOUT) {
         LOG("nothing heard in this window");
         return;
