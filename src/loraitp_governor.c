@@ -27,6 +27,10 @@ static const loraitp_region_info_t regions[LORAITP_REG__COUNT] = {
     { "EU433_NARROW",434040000u,434790000u, DC_NONE, 10,  25000, false },
     { "AMATEUR",             0u,         0u, DC_NONE, 53,      0, true  },
     { "TEST_UNRESTRICTED",   0u,         0u, DC_NONE,127,      0, false },
+    /* LOCAL: a placeholder. Every field is replaced at init from what
+     * the operator declared, so the only thing this row supplies is the
+     * name. */
+    { "LOCAL",               0u,         0u, DC_NONE,127,      0, false },
 };
 
 const loraitp_region_info_t *loraitp_region(loraitp_region_t r)
@@ -36,13 +40,24 @@ const loraitp_region_info_t *loraitp_region(loraitp_region_t r)
     return &regions[r];
 }
 
-uint32_t loraitp_region_budget_ms(loraitp_region_t r)
+static uint32_t budget_of(const loraitp_region_info_t *info)
 {
-    const loraitp_region_info_t *info = loraitp_region(r);
     if (info == NULL || info->duty_ppm == DC_NONE)
         return 0;
     return (uint32_t)(((uint64_t)LORAITP_DC_WINDOW_MS * info->duty_ppm)
                       / 1000000u);
+}
+
+uint32_t loraitp_region_budget_ms(loraitp_region_t r)
+{
+    /* The published figure for a published allocation. LORAITP_REG_LOCAL
+     * has none by definition - ask the governor, not the table. */
+    return budget_of(loraitp_region(r));
+}
+
+uint32_t loraitp_gov_budget_ms(const loraitp_gov_t *g)
+{
+    return budget_of(g->info);
 }
 
 /* Signed difference, so a 32-bit millisecond wrap at 49.7 days is handled. */
@@ -54,8 +69,28 @@ int loraitp_gov_init(loraitp_gov_t *g, const loraitp_session_cfg_t *cfg)
     if (info == NULL)
         return LORAITP_E_ARG;
 
+    if (cfg->region == LORAITP_REG_LOCAL && cfg->local_duty_percent > 100u)
+        return LORAITP_E_ARG;
+
     memset(g, 0, sizeof(*g));
     g->region = cfg->region;
+
+    if (cfg->region == LORAITP_REG_LOCAL) {
+        /*
+         * The operator's own profile. There is no band, no power ceiling
+         * and no bandwidth rule here, because this firmware has no way to
+         * know which jurisdiction the board is standing in - but the duty
+         * cycle is a number the operator can state, and once stated it is
+         * enforced exactly like a published one. That is the whole point:
+         * the governor stops being a table lookup and stays an
+         * accountant. SPEC.md 6.5.
+         */
+        g->local = *info;
+        g->local.duty_ppm = cfg->local_duty_percent
+                            ? (uint32_t)cfg->local_duty_percent * 10000u
+                            : DC_NONE;
+        info = &g->local;
+    }
     g->info = info;
     g->ident_interval_ms = (cfg->ident_interval_s ? cfg->ident_interval_s
                                                   : LORAITP_IDENT_INTERVAL_S)
@@ -117,7 +152,7 @@ uint32_t loraitp_gov_delay_ms(loraitp_gov_t *g, uint32_t now, uint32_t toa_ms)
 
     /* The off-time rule alone satisfies the ratio, but the rolling window
      * is what the regulation actually says. Take the stricter of the two. */
-    uint32_t budget = loraitp_region_budget_ms(g->region);
+    uint32_t budget = loraitp_gov_budget_ms(g);
     uint32_t used = loraitp_gov_airtime_in_window(g, now);
     if (used + toa_ms > budget) {
         uint32_t need = used + toa_ms - budget;

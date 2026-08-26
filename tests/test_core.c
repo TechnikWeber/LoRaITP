@@ -409,6 +409,42 @@ static void test_governor(void)
     CHECK(loraitp_gov_init(&g, &cfg) == LORAITP_E_BANDWIDTH,
           "bandwidth above a narrow-band limit refused");
 
+    /*
+     * LORAITP_REG_LOCAL: the operator states the duty cycle and the
+     * governor enforces that instead of a published one. It has to be a
+     * real limit, not a label - the point of the profile is that
+     * choosing it does not switch the accountant off.
+     */
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.region = LORAITP_REG_LOCAL;
+    cfg.frequency_hz = 915000000u;      /* outside every European row */
+    cfg.bandwidth_hz = 125000; cfg.tx_power_dbm = 22;
+    cfg.local_duty_percent = 10;
+    CHECK(loraitp_gov_init(&g, &cfg) == LORAITP_OK,
+          "a local profile accepts a frequency no European row allows");
+    CHECK(loraitp_gov_budget_ms(&g) == 360000u,
+          "a declared 10% is enforced as 360 s an hour");
+    loraitp_gov_record(&g, 0, 360000u);
+    CHECK(loraitp_gov_delay_ms(&g, 360000u, 1800) > 0,
+          "a declared duty cycle still blocks when it is spent");
+
+    cfg.local_duty_percent = 0;
+    CHECK(loraitp_gov_init(&g, &cfg) == LORAITP_OK, "0% means no limit");
+    CHECK(loraitp_gov_budget_ms(&g) == 0, "no limit reports no budget");
+    CHECK(loraitp_gov_delay_ms(&g, 0, 1800) == 0, "and never blocks");
+
+    cfg.local_duty_percent = 101;
+    CHECK(loraitp_gov_init(&g, &cfg) == LORAITP_E_ARG,
+          "a duty cycle above 100% is refused");
+
+    cfg.region = LORAITP_REG_EU868_G1;
+    cfg.frequency_hz = 868300000; cfg.tx_power_dbm = 14;
+    cfg.local_duty_percent = 100;
+    loraitp_gov_init(&g, &cfg);
+    CHECK(loraitp_gov_budget_ms(&g) == loraitp_region_budget_ms(
+              LORAITP_REG_EU868_G1),
+          "a published region ignores the declared figure entirely");
+
     /* Rolling window, not a calendar hour. */
     memset(&cfg, 0, sizeof(cfg));
     cfg.region = LORAITP_REG_EU868_G1;

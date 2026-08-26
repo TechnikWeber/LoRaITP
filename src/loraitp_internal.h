@@ -41,7 +41,15 @@ typedef struct {
 
 typedef struct {
     loraitp_region_t region;
+
+    /*
+     * Normally a row of the static table. For LORAITP_REG_LOCAL it
+     * points at `local` below, which the operator filled in - so the
+     * governor enforces a profile rather than a jurisdiction, and the
+     * code that does the enforcing does not have to know the difference.
+     */
     const loraitp_region_info_t *info;
+    loraitp_region_info_t local;
     uint32_t slot_end[LORAITP_DC_SLOTS];
     uint32_t slot_toa[LORAITP_DC_SLOTS];
     uint16_t head, n_slots;
@@ -82,6 +90,9 @@ struct loraitp_ctx {
 
 const loraitp_region_info_t *loraitp_region(loraitp_region_t r);
 uint32_t loraitp_region_budget_ms(loraitp_region_t r);
+
+/* The budget of the profile actually in force, table row or not. */
+uint32_t loraitp_gov_budget_ms(const loraitp_gov_t *g);
 
 int  loraitp_gov_init(loraitp_gov_t *g, const loraitp_session_cfg_t *cfg);
 uint32_t loraitp_gov_delay_ms(loraitp_gov_t *g, uint32_t now, uint32_t toa_ms);

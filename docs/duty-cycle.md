@@ -168,7 +168,12 @@ runtime misconfiguration.
 
 For protocol development, `TEST_UNRESTRICTED` removes all limits. It is
 intended for a dummy load, a shielded enclosure, or the channel
-simulator — not for an antenna. The planned host-side simulator is the
+simulator — not for an antenna. For an antenna outside a German
+allocation there is `LOCAL`, where the operator writes down the duty
+cycle their own rules impose and the governor enforces that instead —
+see [SPEC.md 6.5](../SPEC.md). It is behind the expert-mode switch on
+the settings page, which is off by default and says whose
+responsibility it becomes. The planned host-side simulator is the
 better answer for almost all development work: it runs the full state
 machine at any speed you like, with configurable loss and fading, and
 uses no airtime whatsoever.

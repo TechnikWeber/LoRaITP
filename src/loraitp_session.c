@@ -823,7 +823,7 @@ void loraitp_budget_query(loraitp_ctx_t *c, loraitp_budget_t *out)
     loraitp_gov_t *g = &c->gov;
     uint32_t now = c->port->now_ms(c->port->ctx);
     out->airtime_used_ms = loraitp_gov_airtime_in_window(g, now);
-    out->airtime_budget_ms = loraitp_region_budget_ms(c->cfg.region);
+    out->airtime_budget_ms = loraitp_gov_budget_ms(&c->gov);
     out->blocked_for_ms = loraitp_gov_delay_ms(g, now, 0);
     out->airtime_today_ms = g->airtime_total_ms;
 }

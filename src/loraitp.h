@@ -68,6 +68,7 @@ typedef enum {
     LORAITP_REG_EU433_NARROW,   /* 434.04-434.79, 10 mW ERP, no limit, BW<=25k */
     LORAITP_REG_AMATEUR,        /* no duty limit; call sign mandatory */
     LORAITP_REG_TEST_UNRESTRICTED,  /* dummy load / simulator only */
+    LORAITP_REG_LOCAL,          /* the operator states the limits; SPEC.md 6.5 */
     LORAITP_REG__COUNT
 } loraitp_region_t;
 
@@ -133,6 +134,14 @@ typedef struct {
     /* Amateur service. Required when region == LORAITP_REG_AMATEUR. */
     const char *callsign;
     uint16_t ident_interval_s;   /* 0 = default 540 */
+
+    /*
+     * The duty cycle for LORAITP_REG_LOCAL, in percent; 0 means none.
+     * Ignored for every other region, where the figure comes from the
+     * published allocation rather than from whoever is holding the
+     * board. See SPEC.md 6.5.
+     */
+    uint8_t  local_duty_percent;
 
     uint32_t session_timeout_ms;
     uint8_t  max_rounds;         /* 0 = 8 */

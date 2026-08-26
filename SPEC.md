@@ -477,6 +477,7 @@ which is what the governor implements.
 | `EU433_NARROW` | 434.04–434.79 MHz | **none**, BW ≤ 25 kHz | 10 mW ERP | 45c |
 | `AMATEUR` | per licence | none | per licence | §6.4 |
 | `TEST_UNRESTRICTED` | — | none | — | dummy load / simulator only |
+| `LOCAL` | operator's | operator's | operator's | §6.5 |
 
 **`EU868_G3` is the default.** It is the row that makes this protocol
 practical without a licence: *"Geräte mit geringer Reichweite für nicht
@@ -541,6 +542,47 @@ by a misconfiguration.
 > LoRaITP does not and cannot verify anyone's licence. The regulatory
 > profiles are engineering aids that make the compliant path the easy
 > one. Responsibility for lawful operation stays with the operator.
+
+### 6.5 `LOCAL` — the operator states the limits
+
+The profiles above are the German implementation of an ETSI basis. They
+are the right default for the reason any default matters: the compliant
+path should be the one you get by not thinking about it. They are also
+wrong for anyone the tables do not describe — a licensed operator, a
+shielded chamber, a country whose allocation differs, a band this
+document has never heard of.
+
+`LOCAL` is that case. It carries no band, no power ceiling and no
+bandwidth rule, because this protocol has no way to know which
+jurisdiction a board is standing in and will not pretend otherwise.
+
+**What it does not do is switch the governor off.** The operator
+supplies `local_duty_percent`, and from there it is enforced exactly as
+a published figure is: the same rolling hour, the same off-time rule,
+the same refusal to transmit once the budget is spent. The governor
+stops being a table lookup and remains an accountant.
+
+That distinction is the whole of it. `TEST_UNRESTRICTED` exists to
+remove the accounting for a dummy load or a simulator, and is documented
+as not being for an antenna. `LOCAL` is for an antenna, and therefore
+keeps the accounting — against a number the operator had to write down,
+which is a different act from selecting "none", and a more deliberate
+one.
+
+Setting `local_duty_percent` to 0 does remove the limit, and that is the
+one combination this specification asks implementations to make
+awkward. An implementation offering `LOCAL` **should** require a
+deliberate action to reach it, state whose responsibility it then is,
+and not present it as an ordinary setting. The reference firmware puts
+it behind an expert-mode switch that is off by default, and returns the
+board to a licence-free profile if that switch is turned off again.
+
+> None of this changes what is lawful. Transmitting outside your
+> allocation is an offence in every jurisdiction that has one, and no
+> configuration flag alters that. What `LOCAL` changes is who the
+> protocol asks: rather than refuse to describe a situation it cannot
+> know, it makes the operator describe it — and then holds them to what
+> they said.
 
 ---
 
