@@ -571,7 +571,23 @@ static void h_settings_get(void)
     h += "<label>Byte budget per image <input name=budget size=8 value=";
     h += g_cfg->image_budget; h += "></label>";
     h += "<label>Keep how many images <input name=keep size=6 value=";
-    h += g_cfg->keep_images; h += "></label></fieldset>";
+    h += g_cfg->keep_images; h += "></label>";
+
+    h += "<label><input type=checkbox name=dsleep value=1";
+    if (g_cfg->deep_sleep) h += " checked";
+    h += "> Deep sleep between transfers (sender only)</label>";
+    h += "<small><b>The access point does not come back until you press "
+         "RESET.</b> Deep sleep ends in a reboot, so the board wakes, "
+         "sends and powers down again without ever bringing WiFi up — "
+         "which is the whole point, since WiFi costs more than the radio "
+         "does. Press the board's RESET button to get this page back.<br>"
+         "It is also skipped unless the pause is long enough to be safe: "
+         "the duty-cycle history is in RAM and does not survive the "
+         "reboot, so on a band with a limit the board only sleeps if it "
+         "will still be asleep an hour later — by which time everything it "
+         "sent has left the rolling window anyway. On a band with no "
+         "limit there is nothing to lose and it always "
+         "sleeps.</small></fieldset>";
 
     h += "<fieldset><legend>Access point</legend>";
     radio_btn(h, "apoff", "0", "Stay on (default)", !g_cfg->ap_auto_off);
@@ -638,6 +654,7 @@ static void h_settings_post(void)
     if (g_server.hasArg("budget")) c.image_budget = (uint16_t)g_server.arg("budget").toInt();
     if (g_server.hasArg("keep"))   c.keep_images = (uint16_t)g_server.arg("keep").toInt();
     if (g_server.hasArg("rfinv"))  c.rf_sw_invert = g_server.arg("rfinv").toInt() != 0;
+    c.deep_sleep = g_server.hasArg("dsleep");
     if (g_server.hasArg("log"))    c.log_level = (uint8_t)g_server.arg("log").toInt();
     c.captive_portal = g_server.hasArg("cportal");
     if (g_server.hasArg("appw"))

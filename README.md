@@ -181,6 +181,32 @@ while plugging the USB cable in.
    your current settings, so the interval can be chosen with that number
    in view.
 
+### Running on a battery
+
+Between transfers the sender idles with the access point up, which costs
+100–150 mA — more than the radio uses while transmitting, and far more
+than everything else put together. **Deep sleep between transfers** on
+the settings page powers the board down instead. It is off by default,
+because of what it costs you:
+
+* **The access point is gone until you press RESET.** A deep sleep ends
+  in a reboot; the board wakes, sends, and powers down again without ever
+  bringing WiFi up. That is the point — otherwise the sleep gives back
+  most of what it saved. Any boot that is not a scheduled wake brings the
+  page up as normal, so RESET is the way back in.
+* **It is skipped when the pause is too short to be safe.** The
+  duty-cycle governor's rolling window lives in RAM and does not survive
+  the reboot, so a board that slept through part of it would wake
+  believing its whole hourly budget was untouched — on a 1 % or 10 % band
+  that is an offence, not a rounding error. So on a band with a limit the
+  firmware sleeps only if it will still be asleep an hour later, by which
+  time everything it sent has aged out of the window anyway. On a band
+  with no limit there is nothing to lose and it always sleeps. A pause
+  shorter than that is spent awake, and the log says so.
+
+Deep sleep is a sender-side setting. A receiver must listen
+continuously — see the note about shared clocks above.
+
 The boards start on **869.85 MHz at 5 mW** — the sub-band that has no
 airtime limit at all, so you can experiment as much as you like without
 using up any budget and without needing a licence. Range will be short.
@@ -334,6 +360,9 @@ likeliest place, not the protocol.
       markers, verified against an independent decoder
 - [x] WiFi access point and web UI — gallery, live airtime budget, and
       the settings that matter in the field
+- [x] Schedule and deep sleep — a transfer every _n_ hours, and the board
+      powered down in between when the pause is long enough that the
+      duty-cycle window can be safely forgotten
 - [x] Web flasher and CI
 - [ ] Web flasher on GitHub Pages (WebSerial for the ESP32s, UF2 for the
       nRF52840)

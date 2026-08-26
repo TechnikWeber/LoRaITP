@@ -17,6 +17,7 @@
  */
 #include <Arduino.h>
 #include <LittleFS.h>
+#include <esp_sleep.h>
 
 #include "appcfg.h"
 #include "board.h"
@@ -46,6 +47,22 @@ static uint8_t jpegbuf[32 * 1024];
 static uint8_t fec_scratch[24 * 1024];
 
 static char last_result[64] = "nothing yet";
+
+/*
+ * Tobs from BNetzA Vfg. 91/2025: the duty cycle is measured over a
+ * rolling hour. The core defines this too, in loraitp_internal.h, but
+ * that header is not installed and this is the only place the
+ * application needs the number.
+ */
+#define DUTY_WINDOW_MS 3600000u
+
+/* Set in setup(), before anything else touches the sleep API. */
+static bool woke_from_timer;
+
+/* RTC memory survives a deep sleep; plain RAM does not. Only used to
+ * report how many times the board has woken, which is the one number
+ * that says whether the schedule is running at all. */
+RTC_DATA_ATTR static uint32_t rtc_wakes;
 static const char *camera_state = "not fitted";
 static uint32_t next_run_ms;
 static int16_t last_rssi;
@@ -185,8 +202,19 @@ static void web_task(void *)
 
 void setup(void)
 {
+    woke_from_timer = (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER);
+    if (woke_from_timer)
+        rtc_wakes++;
+
     Serial.begin(115200);
-    delay(2000);
+
+    /*
+     * Two seconds for a USB-CDC host to enumerate, so the first lines of
+     * a bring-up are not lost. On a timer wake there is nobody watching
+     * and it is two seconds of a battery, so skip it.
+     */
+    if (!woke_from_timer)
+        delay(2000);
 
     if (!LittleFS.begin(true, LORAITP_STORE_DIR, 10, "images"))
         die("LittleFS mount", LORAITP_E_IO);
@@ -281,11 +309,80 @@ void setup(void)
         LOG("%s - check region, frequency, power and call sign", last_result);
     }
 
-    loraitp_webui_begin(&cfg, store, status_cb, trigger_cb, NULL);
-    xTaskCreatePinnedToCore(web_task, "web", 4096, NULL, 1, NULL, 0);
+    /*
+     * On a scheduled wake the access point stays down.
+     *
+     * That is the whole point of deep sleep: WiFi draws 100-150 mA, more
+     * than the radio does while transmitting, so bringing it up for every
+     * picture would give back most of what the sleep saved. The board
+     * wakes, sends and powers down again without ever being visible.
+     *
+     * RESET is the way back in. Any boot that is not a timer wake - the
+     * button, a power cycle, a fresh flash - brings the page up as
+     * normal, which is also what makes the setting reversible.
+     */
+    bool headless = woke_from_timer && cfg.deep_sleep;
+    if (headless) {
+        LOG("scheduled wake #%lu - access point stays down, press RESET "
+            "for the web page", (unsigned long)rtc_wakes);
+    } else {
+        loraitp_webui_begin(&cfg, store, status_cb, trigger_cb, NULL);
+        xTaskCreatePinnedToCore(web_task, "web", 4096, NULL, 1, NULL, 0);
+    }
 
     publish_status();
-    next_run_ms = millis() + 3000;
+
+    /* Three seconds for the access point to settle before the radio takes
+     * the CPU for minutes at a time. Nothing to settle when there is no
+     * access point. */
+    next_run_ms = millis() + (headless ? 0u : 3000u);
+}
+
+/*
+ * Power the board down until the next transfer is due.
+ *
+ * Deep sleep ends in a reboot, and that is the difficulty: the
+ * duty-cycle governor's rolling window lives in RAM, so a board that
+ * slept through it wakes up believing its whole hourly budget is
+ * untouched. On a 1% or 10% band that is not a cosmetic error, it is an
+ * offence - and it is the same bug the firmware already had once, when
+ * the window was rebuilt before every transfer.
+ *
+ * Rather than move the window into RTC memory and re-base every
+ * timestamp against a millis() that restarts at zero, sleep only when
+ * the answer does not matter: either the band has no limit and there is
+ * no window to lose, or the sleep is longer than the window itself, in
+ * which case everything recorded before it has aged out by the time the
+ * board wakes. Both cases are exact rather than approximate.
+ *
+ * A pause too short for that is simply spent awake. Deep sleep is for
+ * the node that sends a picture every few hours, which is the only case
+ * where it is worth anything.
+ */
+static void maybe_deep_sleep(uint32_t sleep_ms)
+{
+    if (!cfg.deep_sleep || cfg.role != LORAITP_ROLE_SENDER)
+        return;
+
+    uint32_t floor_ms = g_snap.budget_ms ? DUTY_WINDOW_MS : 20000u;
+    if (sleep_ms < floor_ms) {
+        LOG("staying awake for %lu s: %s", (unsigned long)(sleep_ms / 1000u),
+            g_snap.budget_ms
+              ? "shorter than the duty-cycle window, and the airtime "
+                "already used has to be remembered"
+              : "too short to be worth a reboot");
+        return;
+    }
+
+    LOG("deep sleep for %lu s - the access point goes with it",
+        (unsigned long)(sleep_ms / 1000u));
+    Serial.flush();
+
+    if (port.radio_sleep)
+        port.radio_sleep(port.ctx);      /* the SX1262 has its own sleep */
+
+    esp_sleep_enable_timer_wakeup((uint64_t)sleep_ms * 1000ull);
+    esp_deep_sleep_start();              /* does not return */
 }
 
 /* --------------------------------------------------------------- sender */
@@ -440,8 +537,16 @@ void loop(void)
 
     if (ctx == NULL) {
         /* Configuration was refused at startup. The web page is up and
-         * says so; there is nothing useful to do on the radio. */
+         * says so; there is nothing useful to do on the radio.
+         *
+         * Unless nobody can read it: after a scheduled wake there is no
+         * access point either, and spinning here would flatten the
+         * battery within a day without fixing anything. Sleep the
+         * interval instead - a refused configuration is still refused
+         * when the board wakes, but the cell survives long enough for
+         * someone to walk out and press RESET. */
         next_run_ms = millis() + 30000;
+        maybe_deep_sleep(cfg.interval_s ? cfg.interval_s * 1000u : 60000u);
         return;
     }
 
@@ -466,6 +571,8 @@ void loop(void)
         next_run_ms = started + period_ms;
         if ((int32_t)(millis() - next_run_ms) >= 0)
             next_run_ms = millis();
+        else
+            maybe_deep_sleep(next_run_ms - millis());
         return;
     }
 

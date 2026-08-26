@@ -41,6 +41,7 @@ void loraitp_cfg_defaults(loraitp_appcfg_t *c, bool board_has_camera)
     c->log_level = 1;
 
     c->interval_s = 300;             /* every five minutes while testing */
+    c->deep_sleep = false;
     c->image_budget = 8000;
     c->keep_images = 32;
     c->callsign[0] = '\0';
@@ -74,6 +75,7 @@ void loraitp_cfg_load(loraitp_appcfg_t *c, bool board_has_camera)
     c->log_level = p.getUChar("log", c->log_level);
 
     c->interval_s = p.getULong("interval", c->interval_s);
+    c->deep_sleep = p.getBool("dsleep", c->deep_sleep);
     c->image_budget = p.getUShort("budget", c->image_budget);
     c->keep_images = p.getUShort("keep", c->keep_images);
     p.getString("call", c->callsign, sizeof(c->callsign));
@@ -103,6 +105,7 @@ void loraitp_cfg_save(const loraitp_appcfg_t *c)
     p.putUChar("sync", c->sync_word);
     p.putUChar("log", c->log_level);
     p.putULong("interval", c->interval_s);
+    p.putBool("dsleep", c->deep_sleep);
     p.putUShort("budget", c->image_budget);
     p.putUShort("keep", c->keep_images);
     p.putString("call", c->callsign);

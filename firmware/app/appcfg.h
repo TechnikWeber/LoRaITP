@@ -68,6 +68,19 @@ typedef struct {
 
     /* Capture and schedule. */
     uint32_t interval_s;         /* between transfers */
+
+    /*
+     * Power the board down between transfers instead of idling.
+     *
+     * Off by default, and not only out of caution: a deep sleep ends in a
+     * reboot, so the access point is gone until someone presses RESET.
+     * That is the right trade on a mast and the wrong one on a bench.
+     *
+     * It also costs the duty-cycle history, which lives in RAM - see
+     * maybe_deep_sleep() in main.cpp for what the firmware does about
+     * that.
+     */
+    bool     deep_sleep;
     uint16_t image_budget;       /* bytes; 0 = ask the duty-cycle governor */
     uint16_t keep_images;
 
