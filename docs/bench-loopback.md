@@ -67,10 +67,22 @@ place to look. Bring the XIAO in second, once you know the software side
 is sound — then a failure means pins or polarity, and you have a working
 reference to compare against.
 
-The lack of a camera is not a limitation here. With no camera the sender
-transmits a **deterministic synthetic pattern**, and the receiver checks
-the image CRC-32 — so a Heltec pair verifies the whole path byte for
-byte, which a photograph cannot do.
+**No Heltec can take a camera, and none needs one here.** There is no
+connector and no wiring to add: `LORAITP_HAS_CAMERA` is only defined for
+the XIAO Sense build, so the camera code is not even compiled into a
+Heltec binary. The Sense is the only board in this project with a
+camera, because it comes with one attached.
+
+That is not a limitation for this test, and arguably the reverse. With
+no camera the sender transmits a **deterministic synthetic pattern**,
+and the receiver verifies the image CRC-32 — so a Heltec pair checks the
+whole path byte for byte, which a photograph cannot do. What the
+loopback is testing is the radio and the protocol; the camera is a
+separate question, and the Sense answers it afterwards.
+
+If a Sense is one of your two boards, make it the **sender** and you get
+both tests at once — real photograph, real transfer. If it is your only
+board, you still need a second one of any kind to receive.
 
 ---
 
@@ -125,12 +137,15 @@ configuration, stop and read it — the board is telling you what is
 wrong, and it will not transmit until it is fixed. That the page is up
 at all means the failure is a setting rather than the board.
 
-> **Keep the tab open.** The access point drops five minutes after the
-> last request. An open page polls every five seconds, so it stays up
-> while you are looking at it — but close the tab, walk away, and you
-> will need to press **RESET** to get back in. That is the intended
-> behaviour on a battery; it is merely surprising on a desk. *Stay on*
-> under **Access point** in the settings turns it off for the duration.
+> **Keep a tab open.** The access point drops five minutes after the
+> last request. Any open page keeps asking the board for something, so
+> it stays up while you are looking at it — but close the tab, walk
+> away, and you will need to press **RESET** to get back in. That is the
+> intended behaviour on a battery and merely surprising on a desk;
+> *Stay on* under **Access point** removes it for the duration.
+>
+> A phone that locks its screen stops the timers, so the board may be
+> gone when you unlock it. RESET, again.
 
 ## 3. Set the roles
 

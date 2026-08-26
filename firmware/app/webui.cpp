@@ -189,6 +189,16 @@ button{font:inherit;padding:.45rem 1.2rem;margin-top:1rem}
 a{color:inherit}
 </style>
 <p><a href="/">&larr; back</a></p><h1>Settings</h1><form method=post>
+<script>
+/*
+ * The access point drops after five minutes without a request, and this
+ * page - unlike the main one - asks the board for nothing once it has
+ * loaded. Reading this page carefully takes longer than five minutes,
+ * which meant the network vanished while somebody was deciding what to
+ * type and their save failed into a dead socket.
+ */
+setInterval(()=>{fetch('/keepalive').catch(()=>{})},30000);
+</script>
 )HTML";
 
 /* ------------------------------------------------------------ helpers */
