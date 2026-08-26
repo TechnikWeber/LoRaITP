@@ -40,7 +40,15 @@ void loraitp_cfg_defaults(loraitp_appcfg_t *c, bool board_has_camera)
     c->sync_word = 0x12;          /* private; 0x34 would be LoRaWAN's */
     c->log_level = 1;
 
-    c->interval_s = 300;             /* every five minutes while testing */
+    /*
+     * One picture a day - the case the whole airtime budget is designed
+     * around, and the one a board left alone should fall into. A first
+     * transfer still runs a few seconds after boot, so a bench test is
+     * not a day's wait; from then on the "send now" button is what
+     * bring-up should use, because the interval that makes sense in the
+     * field is exactly the one that makes testing unbearable.
+     */
+    c->interval_s = 24u * 3600u;
     c->deep_sleep = false;
     c->image_budget = 8000;
     c->keep_images = 32;

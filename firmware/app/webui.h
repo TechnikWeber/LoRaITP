@@ -38,10 +38,10 @@ typedef void (*loraitp_webui_status_cb)(void *user,
 /*
  * Run the next transfer immediately instead of waiting for the schedule.
  *
- * Standing next to two boards during a first bring-up and waiting five
- * minutes for the timer is not debugging, it is loitering - and the
- * interval that makes sense in the field is exactly the one that makes
- * testing unbearable.
+ * Standing next to two boards during a first bring-up and waiting for
+ * the timer is not debugging, it is loitering - and with the schedule
+ * defaulting to a day, it is not even an option. The interval that makes
+ * sense in the field is exactly the one that makes testing unbearable.
  */
 typedef void (*loraitp_webui_trigger_cb)(void *user);
 
