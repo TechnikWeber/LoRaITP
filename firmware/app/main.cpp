@@ -141,7 +141,7 @@ static uint32_t next_run_ms;
 static int16_t last_rssi;
 static int8_t last_snr;
 
-#define LORAITP_APP_VERSION "0.1.1-alpha"
+#define LORAITP_APP_VERSION "0.2.0-alpha"
 
 /* What the demodulator needs, per spreading factor, in dB. */
 static float required_snr(uint8_t sf)
