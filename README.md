@@ -17,7 +17,9 @@ gateway. A sender and a receiver that agree on a frequency are enough.
 > against a simulated channel, a portable C core passes 109 checks against
 > vectors generated from it, and the firmware builds for all three ESP32
 > targets — 44 % of flash, 40 % of RAM on the tightest of them. The next
-> step is two boards on a desk. See [the roadmap](#roadmap).
+> step is two boards on a desk, and
+> **[docs/bench-loopback.md](docs/bench-loopback.md)** is the procedure
+> for it. See also [the roadmap](#roadmap).
 
 ---
 
@@ -162,6 +164,12 @@ while plugging the USB cable in.
 
 ### First run
 
+> Doing this for the first time, with two boards that have never
+> transmitted? Follow
+> **[docs/bench-loopback.md](docs/bench-loopback.md)** instead. It covers
+> the same ground in order, says which pair of boards to start with and
+> why, and lists what to check when nothing arrives.
+
 1. On your phone or laptop, connect to the WiFi network **`LoRaITP-XXXX`**
    that the board creates.
 2. Open **`http://192.168.4.1`**. You will see the image gallery, the
@@ -273,9 +281,10 @@ tools/           calculators; every number in the docs comes from here
 sim/             Python reference implementation + channel simulator
 src/             portable C core   <- no platform headers, no malloc
 port/            platform shims    <- no protocol logic
-firmware/        boards/ (pin maps), node/ (sender), base/ (receiver)
-port/            radio (RadioLib) and storage (LittleFS) shims
+                 radio (RadioLib) and storage (LittleFS)
+firmware/        app/ (one binary, both roles), boards/ (pin maps)
 tests/           core against the simulator, on the host
+docs/            hardware, duty cycle, camera, storage, bring-up
 ```
 
 The boundary between `src/` and `port/` is the one that matters, and it
@@ -385,7 +394,8 @@ likeliest place, not the protocol.
 - [ ] The XIAO pin numbers confirmed by a board that actually works
 - [ ] **Bench loopback on `EU868_G4_LP`** (5 mW, no duty cycle: no budget
       burnt, no licence needed) — the firmware is written and builds; it
-      has never been run
+      has never been run. The procedure is written up in
+      [docs/bench-loopback.md](docs/bench-loopback.md)
 - [x] LittleFS image store — ring buffer, sidecar statistics, recovery
       from an interrupted transfer
 - [x] Camera pipeline — grayscale capture, software JPEG with restart

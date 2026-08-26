@@ -241,10 +241,11 @@ infrastructure to run.
 2. ~~LittleFS storage behind `image_read` / `image_write`~~ — done.
 3. **The first build against the real RadioLib and Arduino core**, and
    the XIAO radio pin numbers confirmed against the module you have.
-4. **A loopback on the bench** — `firmware/node/main.cpp` is written:
+4. **A loopback on the bench** — `firmware/app/main.cpp` is written:
    two boards, `EU868_G4_LP` (5 mW, no duty cycle), a synthetic image
    from flash. This is the profile to develop against; it burns no budget
    and needs no licence, so a hundred transfers cost an afternoon.
+   Written up step by step in [bench-loopback.md](bench-loopback.md).
 5. **Camera and software JPEG** on the XIAO Sense.
 6. **Application** — schedule, deep sleep, button, AP.
 7. **Web flasher and CI.**
