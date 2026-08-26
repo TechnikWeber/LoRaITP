@@ -23,16 +23,21 @@ typedef struct {
     uint8_t  role;
 
     /*
-     * The access point is ON by default and stays on.
+     * The access point comes up and drops five minutes after the last
+     * request.
      *
      * It costs 100-150 mA continuously, which on a battery node dominates
      * everything else - the radio draws less than that even while
-     * transmitting. So the power-saving behaviour is built and tested,
-     * but it is opt-in: while the thing is on a bench being debugged, an
-     * access point that disappears is a nuisance rather than a feature.
+     * transmitting. Leaving it up is the bench setting, and the bench is
+     * not where these boards are supposed to end up.
+     *
+     * Five minutes measured from the last request, not from boot, so
+     * nobody gets thrown out mid-edit. RESET brings it back, which is
+     * also the answer for a board that has gone to sleep - there is no
+     * second button to press and no reason to add one.
      */
     bool     ap_enabled;
-    bool     ap_auto_off;        /* default false */
+    bool     ap_auto_off;        /* default true */
     uint16_t ap_timeout_s;       /* how long without traffic before it drops */
     char     ap_password[24];    /* empty = open network */
     bool     captive_portal;     /* pop the page up automatically */

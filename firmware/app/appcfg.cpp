@@ -15,7 +15,7 @@ void loraitp_cfg_defaults(loraitp_appcfg_t *c, bool board_has_camera)
     c->role = board_has_camera ? LORAITP_ROLE_SENDER : LORAITP_ROLE_RECEIVER;
 
     c->ap_enabled = true;
-    c->ap_auto_off = false;          /* see the note in appcfg.h */
+    c->ap_auto_off = true;           /* see the note in appcfg.h */
     c->ap_timeout_s = 300;
     c->ap_password[0] = '\0';
     c->captive_portal = true;

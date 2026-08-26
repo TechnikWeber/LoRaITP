@@ -597,8 +597,9 @@ static void h_settings_get(void)
          "sleeps.</small></fieldset>";
 
     h += "<fieldset><legend>Access point</legend>";
-    radio_btn(h, "apoff", "0", "Stay on (default)", !g_cfg->ap_auto_off);
-    radio_btn(h, "apoff", "1", "Switch off when idle", g_cfg->ap_auto_off);
+    radio_btn(h, "apoff", "1", "Switch off when idle (default)",
+              g_cfg->ap_auto_off);
+    radio_btn(h, "apoff", "0", "Stay on", !g_cfg->ap_auto_off);
     h += "<label>Idle timeout, seconds <input name=apto size=6 value=";
     h += g_cfg->ap_timeout_s; h += "></label>";
     h += "<label>Password (blank = open) <input name=appw value=";
@@ -607,8 +608,12 @@ static void h_settings_get(void)
     if (g_cfg->captive_portal) h += " checked";
     h += "> Pop the page up automatically on joining</label>";
     h += "<small>WiFi draws 100–150 mA continuously — more than the "
-         "radio uses while transmitting. Switching it off matters on a "
-         "battery and not at all on a bench.</small></fieldset>";
+         "radio uses while transmitting, and more than everything else "
+         "put together. The timeout runs from the last request rather "
+         "than from boot, so it will not drop out from under you while "
+         "you are typing. <b>Press RESET to get it back</b> — that is "
+         "also how you reach a board that is deep sleeping.</small>"
+         "</fieldset>";
 
     h += "<fieldset><legend>Log</legend>";
     radio_btn(h, "log", "0", "Off", g_cfg->log_level == 0);

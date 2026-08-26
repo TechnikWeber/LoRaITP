@@ -196,6 +196,13 @@ because of what it costs you:
   bringing WiFi up. That is the point — otherwise the sleep gives back
   most of what it saved. Any boot that is not a scheduled wake brings the
   page up as normal, so RESET is the way back in.
+
+  Even without deep sleep the access point drops **five minutes after the
+  last request** and RESET brings it back, so the same button covers both
+  cases and there is nothing else to press. The timeout runs from the
+  last request rather than from boot — it will not disappear while you
+  are still using it. *Stay on* under **Access point** is the bench
+  setting.
 * **It is skipped when the pause is too short to be safe.** The
   duty-cycle governor's rolling window lives in RAM and does not survive
   the reboot, so a board that slept through part of it would wake
