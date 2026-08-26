@@ -63,6 +63,79 @@ static bool woke_from_timer;
  * report how many times the board has woken, which is the one number
  * that says whether the schedule is running at all. */
 RTC_DATA_ATTR static uint32_t rtc_wakes;
+
+/*
+ * The duty-cycle window, mirrored where a reboot cannot reach it.
+ *
+ * An hour of airtime is an hour of airtime whether or not the board
+ * restarted in the middle of it. Every way this firmware can lose RAM -
+ * a settings change, a deep sleep, a watchdog, a brown-out - used to end
+ * with a governor that believed the whole hourly budget was untouched,
+ * and a station that transmits over its budget in good faith is still a
+ * station transmitting over its budget.
+ *
+ * RTC_NOINIT_ATTR rather than RTC_DATA_ATTR: the latter is reloaded from
+ * flash by the bootloader on every reset that is not a deep-sleep wake,
+ * which is exactly the case that matters most here. Nothing in it is
+ * trusted - a magic and a CRC decide whether it is a budget or whatever
+ * the last firmware left in that address.
+ */
+#define BUDGET_MAGIC 0x4C495442u        /* 'LITB' */
+
+RTC_NOINIT_ATTR static struct {
+    uint32_t magic;
+    uint32_t crc;                       /* over away_ms, len and the blob */
+    uint32_t away_ms;
+    uint32_t len;
+    uint8_t  blob[LORAITP_BUDGET_STATE_MAX];
+} rtc_budget;
+
+/*
+ * Radio core only. The governor is not locked, and pruning the window
+ * mutates it - the web core must never call this.
+ */
+static void budget_mirror(uint32_t away_ms)
+{
+    if (ctx == NULL)
+        return;
+    int n = loraitp_budget_export(ctx, rtc_budget.blob,
+                                  sizeof(rtc_budget.blob));
+    if (n <= 0)
+        return;
+    rtc_budget.len = (uint32_t)n;
+    rtc_budget.away_ms = away_ms;
+    rtc_budget.crc = loraitp_crc32((const uint8_t *)&rtc_budget.away_ms,
+                                   2u * sizeof(uint32_t) + (size_t)n);
+    rtc_budget.magic = BUDGET_MAGIC;
+}
+
+static void budget_restore(void)
+{
+    if (ctx == NULL)
+        return;
+    if (rtc_budget.magic != BUDGET_MAGIC) {
+        LOG("no duty-cycle history to restore - starting with an empty hour");
+        return;
+    }
+    if (rtc_budget.len == 0 || rtc_budget.len > sizeof(rtc_budget.blob)
+        || rtc_budget.crc != loraitp_crc32(
+               (const uint8_t *)&rtc_budget.away_ms,
+               2u * sizeof(uint32_t) + (size_t)rtc_budget.len)) {
+        LOG("duty-cycle history is not readable - starting with an empty hour");
+        return;
+    }
+    if (loraitp_budget_import(ctx, rtc_budget.blob, rtc_budget.len,
+                              rtc_budget.away_ms) != LORAITP_OK) {
+        LOG("duty-cycle history refused by the core");
+        return;
+    }
+
+    loraitp_budget_t b;
+    loraitp_budget_query(ctx, &b);
+    LOG("duty-cycle history restored: %lu ms still in the window, "
+        "%lu s away", (unsigned long)b.airtime_used_ms,
+        (unsigned long)(rtc_budget.away_ms / 1000u));
+}
 static const char *camera_state = "not fitted";
 static uint32_t next_run_ms;
 static int16_t last_rssi;
@@ -89,6 +162,20 @@ static void die(const char *what, int rc)
     }
 }
 
+/*
+ * The core calls this from inside a session, on the radio core, right
+ * after the governor has recorded the frame - so mirroring here keeps
+ * the snapshot at most one frame behind the truth. That is what makes it
+ * useful for the reboots nobody schedules: a watchdog or a brown-out
+ * mid-transfer still wakes up owing the airtime it already spent.
+ */
+static void trace_cb(void *user, const loraitp_trace_t *t)
+{
+    loraitp_log_trace(user, t);
+    if (t->ev == LORAITP_EV_TX)
+        budget_mirror(0);
+}
+
 static void configure_session(loraitp_session_cfg_t *s)
 {
     memset(s, 0, sizeof(*s));
@@ -105,7 +192,7 @@ static void configure_session(loraitp_session_cfg_t *s)
     s->coding_rate = cfg.coding_rate;
     s->fec_scratch = fec_scratch;
     s->fec_scratch_len = sizeof(fec_scratch);
-    s->trace = loraitp_log_trace;      /* every frame reaches the web log */
+    s->trace = trace_cb;               /* every frame reaches the web log */
     if (cfg.callsign[0])
         s->callsign = cfg.callsign;
 }
@@ -307,6 +394,10 @@ void setup(void)
         snprintf(last_result, sizeof(last_result),
                  "refused by the duty-cycle governor (error %d)", rc);
         LOG("%s - check region, frequency, power and call sign", last_result);
+    } else {
+        /* Before anything transmits: what this board already owes from
+         * before the reboot. */
+        budget_restore();
     }
 
     /*
@@ -376,6 +467,10 @@ static void maybe_deep_sleep(uint32_t sleep_ms)
 
     LOG("deep sleep for %lu s - the access point goes with it",
         (unsigned long)(sleep_ms / 1000u));
+
+    /* Record how long the window is about to go unwatched, so what
+     * aged out while the board was off is not counted on the way back. */
+    budget_mirror(sleep_ms);
     Serial.flush();
 
     if (port.radio_sleep)
@@ -531,6 +626,21 @@ void loop(void)
 {
     if ((int32_t)(millis() - next_run_ms) < 0) {
         publish_status();     /* keep the page's numbers fresh while idle */
+
+        /*
+         * Re-mirror the window every ten seconds while idle. The entries
+         * are stored as ages, so a snapshot left over from the last
+         * transmission makes the airtime look younger than it is, which
+         * only ever over-restricts - but a settings restart an hour
+         * after a transfer would then carry a window that should long
+         * since have emptied. Ten seconds keeps it honest for nothing.
+         */
+        static uint32_t last_mirror;
+        if (millis() - last_mirror >= 10000u) {
+            last_mirror = millis();
+            budget_mirror(0);
+        }
+
         delay(200);
         return;
     }

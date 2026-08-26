@@ -14,9 +14,9 @@ gateway. A sender and a receiver that agree on a frequency are enough.
 > **Status: everything builds and passes; nothing has been on the air.**
 > The specification is complete and every number in it is computed rather
 > than estimated. A Python reference implementation runs full transfers
-> against a simulated channel, a portable C core passes 85 checks against
+> against a simulated channel, a portable C core passes 101 checks against
 > vectors generated from it, and the firmware builds for all three ESP32
-> targets — 43 % of flash, 38 % of RAM on the tightest of them. The next
+> targets — 44 % of flash, 40 % of RAM on the tightest of them. The next
 > step is two boards on a desk. See [the roadmap](#roadmap).
 
 ---
@@ -299,7 +299,7 @@ height and a clear line of sight, not on a bigger amplifier.
 $ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
                               # governor rules, feasibility property tests
 $ python3 sim/run.py          # 12 full transfers against simulated loss
-$ cd tests && make run        # 85 checks on the C core
+$ cd tests && make run        # 101 checks on the C core
 $ cd tests && make san        # the same, under ASan and UBSan
 $ cd tests && make port       # 24 checks on the RadioLib adapter
 $ cd tests && make store      # 37 checks on the image store, real files
@@ -335,6 +335,15 @@ were wired together wrongly.
   would land.
 * The status page queried the duty-cycle window from the other core while
   the radio was writing it.
+* A radio setting the driver refused — 27 dBm, which the 500 mW ERP limit
+  on `EU868_G3` invites and the SX1262 will not do — killed the firmware
+  before the web server started, so the only way to undo it was a USB
+  cable. Configuration must not be able to take down the thing that
+  edits configuration.
+* The duty-cycle window was lost on every reboot, and there are four
+  ways to get one: a settings change, a deep sleep, a watchdog, a
+  brown-out. It now survives them; see
+  [docs/duty-cycle.md](docs/duty-cycle.md).
 
 So if something behaves oddly on first power-up, that layer is the
 likeliest place, not the protocol.
@@ -346,7 +355,7 @@ likeliest place, not the protocol.
 - [x] Repository skeleton and the core/port boundary
 - [x] Python reference implementation and channel simulator — 68 checks,
       12 transfer scenarios, no hardware
-- [x] Portable C core — 85 checks, warning-free, sanitizer-clean,
+- [x] Portable C core — 101 checks, warning-free, sanitizer-clean,
       3.9 kB of context and no allocation
 - [x] `port_radiolib.cpp` and pin maps — one adapter for all four boards,
       19 contract checks against a mocked RadioLib
@@ -363,8 +372,10 @@ likeliest place, not the protocol.
 - [x] WiFi access point and web UI — gallery, live airtime budget, and
       the settings that matter in the field
 - [x] Schedule and deep sleep — a transfer every _n_ hours, and the board
-      powered down in between when the pause is long enough that the
-      duty-cycle window can be safely forgotten
+      powered down in between
+- [x] A duty-cycle window that survives a reboot — mirrored to RTC memory
+      after every transmission, so a restart, a sleep or a watchdog does
+      not hand the station its budget back
 - [x] Web flasher and CI
 - [ ] Web flasher on GitHub Pages (WebSerial for the ESP32s, UF2 for the
       nRF52840)
