@@ -182,6 +182,7 @@ static void configure_session(loraitp_session_cfg_t *s)
     s->mode = cfg.broadcast ? LORAITP_MODE_BROADCAST
                             : LORAITP_MODE_INTERACTIVE;
     s->region = (loraitp_region_t)cfg.region;
+    s->local_duty_percent = cfg.local_duty_percent;   /* LOCAL only */
     s->frequency_hz = cfg.frequency_hz;
     s->spreading_factor = cfg.spreading_factor;
     s->coding_rate = 1;

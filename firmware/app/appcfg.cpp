@@ -53,6 +53,8 @@ void loraitp_cfg_defaults(loraitp_appcfg_t *c, bool board_has_camera)
     c->image_budget = 8000;
     c->keep_images = 32;
     c->callsign[0] = '\0';
+    c->expert = false;
+    c->local_duty_percent = 10;   /* only reachable in expert mode */
 }
 
 void loraitp_cfg_load(loraitp_appcfg_t *c, bool board_has_camera)
@@ -87,6 +89,8 @@ void loraitp_cfg_load(loraitp_appcfg_t *c, bool board_has_camera)
     c->image_budget = p.getUShort("budget", c->image_budget);
     c->keep_images = p.getUShort("keep", c->keep_images);
     p.getString("call", c->callsign, sizeof(c->callsign));
+    c->expert = p.getBool("expert", c->expert);
+    c->local_duty_percent = p.getUChar("lduty", c->local_duty_percent);
     p.end();
 }
 
@@ -117,6 +121,8 @@ void loraitp_cfg_save(const loraitp_appcfg_t *c)
     p.putUShort("budget", c->image_budget);
     p.putUShort("keep", c->keep_images);
     p.putString("call", c->callsign);
+    p.putBool("expert", c->expert);
+    p.putUChar("lduty", c->local_duty_percent);
     p.end();
 }
 
@@ -124,7 +130,7 @@ const char *loraitp_cfg_region_name(uint8_t region)
 {
     static const char *names[] = {
         "EU868_G3", "EU868_G1", "EU868_G2", "EU868_G4", "EU868_G4_LP",
-        "EU433", "EU433_NARROW", "AMATEUR", "TEST_UNRESTRICTED"
+        "EU433", "EU433_NARROW", "AMATEUR", "TEST_UNRESTRICTED", "LOCAL"
     };
     if (region >= sizeof(names) / sizeof(names[0]))
         return "?";

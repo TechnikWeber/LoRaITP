@@ -90,6 +90,25 @@ typedef struct {
     uint16_t keep_images;
 
     char     callsign[12];       /* required by the AMATEUR region */
+
+    /*
+     * Expert mode. Off by default, and what it changes is what the
+     * settings page will let you say - not what the governor does.
+     *
+     * The stock page keeps you inside a published German allocation,
+     * which is the right default and the wrong one for a licensed
+     * operator, a test chamber, or a country with different rules. With
+     * this on, the page offers the LOCAL profile, stops holding the
+     * frequency and power fields to a European row, and says plainly
+     * whose responsibility that is.
+     *
+     * The governor is not weakened by any of it. Exceeding a published
+     * limit still requires selecting a profile that permits it, and the
+     * duty cycle of that profile is a number the operator has to write
+     * down - see local_duty_percent.
+     */
+    bool     expert;
+    uint8_t  local_duty_percent; /* LOCAL only; 0 = no duty-cycle limit */
 } loraitp_appcfg_t;
 
 void loraitp_cfg_defaults(loraitp_appcfg_t *c, bool board_has_camera);

@@ -443,6 +443,28 @@ static uint32_t transfer_estimate_s(void)
                             : airtime_ms) / 1000u;
 }
 
+/*
+ * The profiles the page offers, in the order it offers them. LOCAL is
+ * last and only in expert mode; TEST_UNRESTRICTED is in neither list,
+ * because it exists for a dummy load and a settings page is not where
+ * anyone should reach for it.
+ */
+static const uint8_t OFFERED[] = { 4, 0, 1, 3, 5, 7, 9 };
+
+static unsigned region_count(bool expert)
+{
+    return expert ? (unsigned)(sizeof(OFFERED) / sizeof(OFFERED[0]))
+                  : (unsigned)(sizeof(OFFERED) / sizeof(OFFERED[0])) - 1u;
+}
+
+static bool region_offered(uint8_t r, bool expert)
+{
+    for (unsigned i = 0; i < region_count(expert); i++)
+        if (OFFERED[i] == r)
+            return true;
+    return false;
+}
+
 static void h_settings_get(void)
 {
     touch();
@@ -467,18 +489,64 @@ static void h_settings_get(void)
          "module. <b>If the boards hear nothing at all, change this "
          "first.</b></small></fieldset>";
 
+    h += "<fieldset><legend>Expert mode</legend>";
+    h += "<label><input type=checkbox name=expert value=1";
+    if (g_cfg->expert) h += " checked";
+    h += "> Let me set frequency and power outside a published European "
+         "allocation</label>";
+    if (g_cfg->expert) {
+        h += "<small style='border-left:3px solid #c00;padding-left:.6rem'>"
+             "<b>On. You are now the one deciding what is lawful "
+             "here.</b><br>"
+             "The regional profiles are the published German allocation "
+             "(BNetzA Vfg. 91/2025), and they are what makes this thing "
+             "legal to switch on without asking anyone. Off that list, "
+             "nothing in this firmware knows what your jurisdiction, your "
+             "licence or your band plan permit, and it will not pretend "
+             "to. Transmitting outside what you are allowed is an offence "
+             "in every country that has rules at all, and it is your "
+             "offence, not the firmware's.<br>"
+             "Legitimate reasons to be here: a licence that permits more, "
+             "a country whose allocation differs, a shielded chamber, a "
+             "dummy load. \"It did not go far enough\" is not one of "
+             "them — reach for the spreading factor and the antenna "
+             "first, in that order.<br>"
+             "What stays switched on regardless: the duty-cycle "
+             "governor. Under <b>LOCAL</b> it enforces the figure you "
+             "type rather than one from the table, and there is still no "
+             "code path that transmits without asking it."
+             "</small>";
+    } else {
+        h += "<small>Off. Only the published German profiles can be "
+             "selected, and the governor refuses to start on a frequency "
+             "or power the selected one does not allow. That path needs "
+             "no licence. Turn this on only if you know which rules "
+             "apply to you and can name them.</small>";
+    }
+    h += "</fieldset>";
+
     h += "<fieldset><legend>Radio</legend><label>Region <select name=region>";
-    static const uint8_t regions[] = { 4, 0, 1, 3, 5, 7 };
-    for (unsigned i = 0; i < sizeof(regions); i++) {
-        h += "<option value="; h += regions[i];
-        if (regions[i] == g_cfg->region) h += " selected";
-        h += ">"; h += loraitp_cfg_region_name(regions[i]); h += "</option>";
+    for (unsigned i = 0; i < region_count(g_cfg->expert); i++) {
+        h += "<option value="; h += OFFERED[i];
+        if (OFFERED[i] == g_cfg->region) h += " selected";
+        h += ">"; h += loraitp_cfg_region_name(OFFERED[i]); h += "</option>";
     }
     h += "</select></label>";
     h += "<small>EU868_G4_LP is 5 mW with no duty-cycle limit — the "
          "place to develop. EU868_G3 is 500 mW at 10%, where a real link "
          "belongs. The firmware refuses a frequency or power the region "
          "does not allow rather than transmitting anyway.</small>";
+
+    if (g_cfg->expert) {
+        h += "<label>LOCAL duty cycle, % <input name=lduty size=4 value=";
+        h += g_cfg->local_duty_percent; h += "></label>";
+        h += "<small>Applies to the <b>LOCAL</b> profile only, and it is "
+             "the number the governor will hold you to — write down what "
+             "your rules actually say. 0 removes the limit entirely, "
+             "which is a thing you should only do on a dummy load or "
+             "under a licence that permits it. Every other profile "
+             "ignores this field and uses its published figure.</small>";
+    }
 
     h += "<label>Frequency, Hz <input name=freq value=";
     h += g_cfg->frequency_hz; h += "></label>";
@@ -514,10 +582,14 @@ static void h_settings_get(void)
 
     h += "<label>TX power, dBm <input name=pwr size=4 value=";
     h += g_cfg->tx_power_dbm; h += "></label>";
-    h += "<small>The SX1262 gives at most <b>22 dBm</b> at the module, and "
-         "values outside -9..22 are clamped here. EU868_G3 permits 500 mW "
-         "(27 dBm) <i>ERP</i> — that is 22 dBm plus antenna gain, not a "
-         "larger number in this box.</small>";
+    h += "<small>The SX1262 gives at most <b>22 dBm</b> at the module, so "
+         "that is the ceiling whatever else is set — values outside "
+         "-9..22 are clamped here. EU868_G3 permits 500 mW (27 dBm) "
+         "<i>ERP</i>: that is 22 dBm plus antenna gain, not a larger "
+         "number in this box. Above the selected profile's limit the "
+         "governor refuses to start, expert mode or not; expert mode "
+         "changes which profiles you may select, not whether they are "
+         "enforced.</small>";
     h += "<label>Sync word (hex) <input name=sync size=4 value=";
     char sw[8]; snprintf(sw, sizeof(sw), "%02X", g_cfg->sync_word); h += sw;
     h += "></label>";
@@ -684,6 +756,31 @@ static void h_settings_post(void)
     if (g_server.hasArg("keep"))   c.keep_images = (uint16_t)g_server.arg("keep").toInt();
     if (g_server.hasArg("rfinv"))  c.rf_sw_invert = g_server.arg("rfinv").toInt() != 0;
     c.deep_sleep = g_server.hasArg("dsleep");
+    c.expert = g_server.hasArg("expert");
+    if (g_server.hasArg("lduty")) {
+        long d = g_server.arg("lduty").toInt();
+        if (d < 0)   d = 0;
+        if (d > 100) d = 100;
+        c.local_duty_percent = (uint8_t)d;
+    }
+
+    /*
+     * A profile this mode does not offer is not accepted from a form
+     * that could not have shown it - which covers leaving expert mode
+     * with LOCAL still selected, and covers a request that never came
+     * from the page at all.
+     *
+     * Leaving expert mode has to land somewhere transmitting is allowed
+     * without a licence, or the switch is a trap door: the unlocked
+     * profile would stay selected with no way in the stock page to
+     * change it, and the operator would be left transmitting under a
+     * profile they had just said they did not want.
+     */
+    if (!region_offered(c.region, c.expert)) {
+        c.region = (uint8_t)LORAITP_REG_EU868_G4_LP;
+        c.frequency_hz = 869850000u;
+        if (c.tx_power_dbm > 7) c.tx_power_dbm = 7;
+    }
     if (g_server.hasArg("log"))    c.log_level = (uint8_t)g_server.arg("log").toInt();
     c.captive_portal = g_server.hasArg("cportal");
     if (g_server.hasArg("appw"))

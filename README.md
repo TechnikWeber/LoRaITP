@@ -251,6 +251,20 @@ without a call sign, and it refuses and says so rather than transmitting.
 That is deliberate. It is an aid, though, not a guarantee: it cannot know
 your antenna gain or your local rules, and staying legal remains yours.
 
+The regional profiles are the published German allocation, which is the
+right default and the wrong one if the tables do not describe you — a
+licence that permits more, a different country, a shielded chamber.
+**Expert mode** on the settings page unlocks the `LOCAL` profile and
+stops holding frequency and power to a European row.
+
+It does not switch the governor off, and that is the point: under
+`LOCAL` you write down the duty cycle your own rules impose, and it is
+enforced exactly as a published one is — same rolling hour, same
+off-time, same refusal once the budget is spent. There is still no code
+path that transmits without asking; what changes is who the firmware
+asks. Turning expert mode off again puts the board back on
+`EU868_G4_LP` at 5 mW, so the switch is not a trap door.
+
 ## Repository layout
 
 ```
