@@ -441,6 +441,125 @@ static void test_governor(void)
     (void)fake_now_fn;
 }
 
+/* --------------------------------- the window across a lost timebase */
+
+static void test_governor_state(void)
+{
+    printf("\nduty-cycle window across a reboot\n");
+
+    static uint8_t blob[LORAITP_BUDGET_STATE_MAX];
+    loraitp_gov_t g, h;
+    loraitp_session_cfg_t cfg;
+
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.region = LORAITP_REG_EU868_G1;      /* 1%: 36 s an hour */
+    cfg.frequency_hz = 868300000; cfg.bandwidth_hz = 125000;
+    cfg.tx_power_dbm = 14;
+
+    /* Twenty frames of 1.8 s, the last ending at t = 2 s. */
+    loraitp_gov_init(&g, &cfg);
+    for (int i = 0; i < 20; i++)
+        loraitp_gov_record(&g, (uint32_t)i * 100u, 1800);
+    uint32_t before = loraitp_gov_airtime_in_window(&g, 2000);
+
+    int n = loraitp_gov_export(&g, 2000, blob, sizeof(blob));
+    CHECK(n > 0 && (size_t)n <= LORAITP_BUDGET_STATE_MAX,
+          "window exports into its stated size");
+
+    /*
+     * The reboot: a fresh governor, a timebase that restarts near zero,
+     * and no memory of anything. This is the case that used to hand the
+     * station its whole hourly budget back.
+     */
+    loraitp_gov_init(&h, &cfg);
+    CHECK(loraitp_gov_airtime_in_window(&h, 0) == 0,
+          "a fresh governor starts empty");
+    CHECK(loraitp_gov_import(&h, 0, blob, (size_t)n, 0) == LORAITP_OK,
+          "snapshot imports into a fresh governor");
+    CHECK(loraitp_gov_airtime_in_window(&h, 0) == before,
+          "the airtime survives the reboot");
+
+    /* Away for half the window: everything is still inside it. */
+    loraitp_gov_init(&h, &cfg);
+    loraitp_gov_import(&h, 0, blob, (size_t)n, 1800000u);
+    CHECK(loraitp_gov_airtime_in_window(&h, 0) == before,
+          "half an hour away keeps the whole window");
+
+    /* Away for longer than the window: all of it has aged out. */
+    loraitp_gov_init(&h, &cfg);
+    loraitp_gov_import(&h, 0, blob, (size_t)n, 3600000u + 5000u);
+    CHECK(loraitp_gov_airtime_in_window(&h, 0) == 0,
+          "a sleep longer than Tobs empties the window");
+
+    /*
+     * Entries age out one at a time rather than all at once. The oldest
+     * frame ended 200 ms before the snapshot and the next 100 ms later,
+     * so an absence of Tobs - 150 ms drops exactly the first.
+     */
+    loraitp_gov_init(&h, &cfg);
+    loraitp_gov_import(&h, 0, blob, (size_t)n, 3600000u - 150u);
+    CHECK(loraitp_gov_airtime_in_window(&h, 0) == before - 1800u,
+          "entries at the edge of the window drop one at a time");
+
+    /* The off-time rule has to come back too, or the very next frame
+     * goes out inside the gap the last one bought. */
+    loraitp_gov_init(&g, &cfg);
+    loraitp_gov_record(&g, 1000, 1800);     /* 1% -> 180 s of off-time */
+    n = loraitp_gov_export(&g, 2000, blob, sizeof(blob));
+    loraitp_gov_init(&h, &cfg);
+    loraitp_gov_import(&h, 0, blob, (size_t)n, 0);
+    CHECK(loraitp_gov_delay_ms(&h, 0, 1800) > 170000u,
+          "off-time survives the reboot");
+    loraitp_gov_init(&h, &cfg);
+    loraitp_gov_import(&h, 0, blob, (size_t)n, 200000u);
+    CHECK(loraitp_gov_delay_ms(&h, 0, 1800) == 0,
+          "off-time already served while away does not block");
+
+    /* Nothing is trusted: RTC memory that was never written, or written
+     * by another build, must not be read as a budget. */
+    loraitp_gov_init(&g, &cfg);
+    for (int i = 0; i < 20; i++)
+        loraitp_gov_record(&g, (uint32_t)i * 100u, 1800);
+    n = loraitp_gov_export(&g, 2000, blob, sizeof(blob));
+
+    loraitp_gov_init(&h, &cfg);
+    blob[0] ^= 0xFF;
+    CHECK(loraitp_gov_import(&h, 0, blob, (size_t)n, 0) == LORAITP_E_ARG,
+          "a wrong magic is refused");
+    blob[0] ^= 0xFF;
+    blob[4] = 99;
+    CHECK(loraitp_gov_import(&h, 0, blob, (size_t)n, 0) == LORAITP_E_ARG,
+          "a version this build cannot read is refused");
+    loraitp_gov_export(&g, 2000, blob, sizeof(blob));
+    blob[STATE_HDR + 1] ^= 0x01;
+    CHECK(loraitp_gov_import(&h, 0, blob, (size_t)n, 0) == LORAITP_E_ARG,
+          "a corrupted snapshot is refused");
+    CHECK(loraitp_gov_airtime_in_window(&h, 0) == 0,
+          "a refused snapshot leaves the window empty rather than half read");
+
+    n = loraitp_gov_export(&g, 2000, blob, sizeof(blob));
+    CHECK(loraitp_gov_import(&h, 0, blob, STATE_HDR, 0) == LORAITP_E_ARG,
+          "a truncated snapshot is refused");
+
+    /* Too small a buffer is an error, never a partial write. */
+    CHECK(loraitp_gov_export(&g, 2000, blob, LORAITP_BUDGET_STATE_MAX - 1)
+          == LORAITP_E_ARG, "a buffer below the stated size is refused");
+
+    /*
+     * More frames than the snapshot holds. Folding must never lose
+     * airtime - losing it is what lets a station transmit over budget.
+     */
+    loraitp_gov_init(&g, &cfg);
+    for (int i = 0; i < LORAITP_DC_SLOTS; i++)
+        loraitp_gov_record(&g, (uint32_t)i * 10u, 100);
+    uint32_t big = loraitp_gov_airtime_in_window(&g, 3000);
+    n = loraitp_gov_export(&g, 3000, blob, sizeof(blob));
+    loraitp_gov_init(&h, &cfg);
+    loraitp_gov_import(&h, 0, blob, (size_t)n, 0);
+    CHECK(loraitp_gov_airtime_in_window(&h, 0) >= big,
+          "folding a full ring never loses airtime");
+}
+
 /* --------------------------------------------------------- end to end */
 
 static void test_transfer(void)
@@ -591,6 +710,7 @@ int main(void)
     test_cmac();
     test_fec();
     test_governor();
+    test_governor_state();
     test_transfer();
     test_budget_persists();
     printf("\n%d passed, %d failed\n", passed, failed);

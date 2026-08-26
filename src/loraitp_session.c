@@ -828,6 +828,19 @@ void loraitp_budget_query(loraitp_ctx_t *c, loraitp_budget_t *out)
     out->airtime_today_ms = g->airtime_total_ms;
 }
 
+int loraitp_budget_export(loraitp_ctx_t *c, void *buf, size_t cap)
+{
+    return loraitp_gov_export(&c->gov, c->port->now_ms(c->port->ctx),
+                              buf, cap);
+}
+
+int loraitp_budget_import(loraitp_ctx_t *c, const void *buf, size_t len,
+                          uint32_t away_ms)
+{
+    return loraitp_gov_import(&c->gov, c->port->now_ms(c->port->ctx),
+                              buf, len, away_ms);
+}
+
 uint32_t loraitp_budget_bytes_remaining(loraitp_ctx_t *c)
 {
     loraitp_budget_t b;

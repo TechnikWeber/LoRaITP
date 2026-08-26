@@ -93,6 +93,41 @@ The same budget on g3 is 8 640 seconds, about 230 kB per day. That
 turns "one image a day, if nothing goes wrong" into "twenty images a
 day, with room for a bad link".
 
+## The window has to outlive the program
+
+The rule is a *rolling* hour, and a rolling hour does not stop when the
+board does. A station that reboots and forgets what it sent goes on
+transmitting in perfect good faith and is still over its budget.
+
+That is not a hypothetical: this firmware can lose RAM four ways — a
+settings change restarts it, deep sleep ends in a reboot, and a watchdog
+or a brown-out arrives unannounced. Each of them used to hand the
+governor a clean sheet.
+
+So the window is mirrored into RTC memory, which survives a reset, after
+every transmission. Two details make it work across the reboot:
+
+* **Entries carry an age, not a timestamp.** The millisecond clock
+  restarts at zero, so "3 600 000" means nothing afterwards while "one
+  hour ago" still does.
+* **The time spent away is recorded before a planned sleep**, and
+  subtracted on the way back, so what genuinely aged out while the board
+  was off is not counted against it. For an unplanned reboot the time
+  away is taken as zero, which counts a second or two too much — the
+  error that makes the station stricter, never looser.
+
+Nothing in RTC memory is trusted: a magic number and a CRC-32 decide
+whether it holds a budget or whatever the previous firmware left at that
+address, and a snapshot that fails either is discarded rather than
+interpreted. A board that has genuinely lost power starts with an empty
+window, which is correct — it was not transmitting while it was off.
+
+The one case this does not cover is a power failure long enough to
+clear RTC memory but shorter than the observation window. There is no
+clock to consult and no record to keep, so the station starts the hour
+believing it is empty. Solving that needs a battery-backed real-time
+clock, which is not a thing this design assumes.
+
 ## The amateur service
 
 An amateur radio licence is not a way around the 868 MHz rules. The ISM

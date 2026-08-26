@@ -255,6 +255,48 @@ void loraitp_budget_query(loraitp_ctx_t *ctx, loraitp_budget_t *out);
  */
 uint32_t loraitp_budget_bytes_remaining(loraitp_ctx_t *ctx);
 
+/*
+ * The rolling window, in a form that survives losing RAM.
+ *
+ * The window is the one piece of protocol state that must outlive the
+ * program holding it. An hour of airtime is an hour of airtime whether
+ * or not the board rebooted in the middle of it, and a station that
+ * forgets what it sent transmits over its budget in perfect good faith -
+ * which is exactly what a duty cycle is written to prevent. Deep sleep,
+ * a settings change that restarts, a watchdog, a brown-out: all of them
+ * end with an empty window and a clean conscience.
+ *
+ * So: export into memory that survives the reboot in question, import
+ * once the context is up again. `away_ms` is how much real time passed
+ * between the two - the sleep duration, or 0 for a restart, where a
+ * couple of seconds under-counted only makes the result stricter.
+ *
+ * Entries that aged out while away are dropped. Nothing here is trusted:
+ * a blob with the wrong magic, version or checksum is refused rather
+ * than interpreted, because the alternative to "start with an empty
+ * window" is "start with somebody else's".
+ *
+ * The snapshot is region-agnostic on purpose. Airtime carried into a
+ * different band restricts the station rather than freeing it, and being
+ * strict about a band you have left is not a fault worth code.
+ */
+#define LORAITP_BUDGET_STATE_MAX 1040u
+
+/*
+ * Returns bytes written, or LORAITP_E_ARG if cap is too small. Pruning
+ * the window mutates it, so ctx is not const.
+ *
+ * Cheap enough for the caller to do after every transmission, which is
+ * the only way the snapshot is current when an unplanned reboot takes
+ * it: 128 entries at most, folded like a full ring if there are more.
+ */
+int loraitp_budget_export(loraitp_ctx_t *ctx, void *buf, size_t cap);
+
+/* Returns LORAITP_OK, or LORAITP_E_ARG for a blob this build cannot
+ * read. On failure the window is left exactly as it was. */
+int loraitp_budget_import(loraitp_ctx_t *ctx, const void *buf, size_t len,
+                          uint32_t away_ms);
+
 /* Time on air in microseconds. Mirrors tools/airtime.py exactly. */
 uint32_t loraitp_time_on_air_us(uint8_t payload_len, uint8_t sf,
                                 uint32_t bw_hz, uint8_t cr,

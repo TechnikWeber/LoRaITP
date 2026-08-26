@@ -174,3 +174,140 @@ void loraitp_gov_ident_sent(loraitp_gov_t *g, uint32_t now)
     g->last_ident_ms = now;
     g->has_identified = true;
 }
+
+/* ------------------------------------------- window across a reboot */
+
+/*
+ * Fixed little-endian layout. It crosses a reboot rather than a link,
+ * but the discipline is the same, and one part of it matters more here
+ * than on the air: entries carry an *age*, not a timestamp. millis()
+ * restarts at zero after the reboot this exists to survive, so an
+ * absolute stamp from the old timebase means nothing in the new one.
+ * "How long ago" survives the change; "when" does not.
+ *
+ *   0  magic          8  count             20  entries[count]
+ *   4  version       12  airtime_total_ms      { int32 age_ms, u32 toa_ms }
+ *                    16  blocked_remaining     4 bytes CRC-32 at the end
+ */
+static void put32(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)v;         p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24);
+}
+
+static uint32_t get32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8)
+         | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+int loraitp_gov_export(loraitp_gov_t *g, uint32_t now, void *buf, size_t cap)
+{
+    if (buf == NULL || cap < LORAITP_BUDGET_STATE_MAX)
+        return LORAITP_E_ARG;
+
+    prune(g, now);
+
+    uint8_t *p = (uint8_t *)buf;
+    uint8_t *e = p + STATE_HDR;
+    uint16_t n = 0;
+
+    /*
+     * More entries than the snapshot holds: fold the oldest ones onto
+     * the first that is kept, exactly as a full ring folds. The survivor
+     * carries the later expiry, so folded airtime leaves the window
+     * later than it really would - over-counting delays the station,
+     * under-counting would put it over budget.
+     *
+     * A transfer is a few dozen frames, so a real schedule never takes
+     * this path. It is here because the ring holds twice what the
+     * snapshot does, and silently dropping the difference is the one
+     * outcome that must not happen.
+     */
+    uint16_t skip = (g->n_slots > STATE_MAX_ENTRIES)
+                    ? (uint16_t)(g->n_slots - STATE_MAX_ENTRIES) : 0u;
+    uint32_t folded = 0;
+
+    for (uint16_t i = 0; i < g->n_slots; i++) {
+        uint16_t s = (uint16_t)((g->head + i) % LORAITP_DC_SLOTS);
+        if (i < skip) {
+            folded += g->slot_toa[s];
+            continue;
+        }
+        uint32_t toa = g->slot_toa[s] + folded;
+        folded = 0;
+        put32(e, (uint32_t)delta(now, g->slot_end[s]));   /* age, signed */
+        put32(e + 4, toa);
+        e += STATE_ENTRY;
+        n++;
+    }
+
+    int32_t blocked = delta(g->blocked_until, now);
+    put32(p,      STATE_MAGIC);
+    put32(p + 4,  STATE_VERSION);
+    put32(p + 8,  (uint32_t)n);
+    put32(p + 12, g->airtime_total_ms);
+    put32(p + 16, blocked > 0 ? (uint32_t)blocked : 0u);
+
+    size_t body = STATE_HDR + (size_t)n * STATE_ENTRY;
+    put32(p + body, loraitp_crc32(p, body));
+    return (int)(body + STATE_TAIL);
+}
+
+int loraitp_gov_import(loraitp_gov_t *g, uint32_t now, const void *buf,
+                       size_t len, uint32_t away_ms)
+{
+    const uint8_t *p = (const uint8_t *)buf;
+    if (buf == NULL || len < STATE_HDR + STATE_TAIL)
+        return LORAITP_E_ARG;
+    if (get32(p) != STATE_MAGIC || get32(p + 4) != STATE_VERSION)
+        return LORAITP_E_ARG;
+
+    uint32_t n = get32(p + 8);
+    if (n > STATE_MAX_ENTRIES)
+        return LORAITP_E_ARG;
+    size_t body = STATE_HDR + (size_t)n * STATE_ENTRY;
+    if (len < body + STATE_TAIL)
+        return LORAITP_E_ARG;
+    if (get32(p + body) != loraitp_crc32(p, body))
+        return LORAITP_E_ARG;
+
+    /* Read whole and checked before anything is written, so a refusal
+     * leaves the window as it was rather than half replaced. */
+    g->head = 0;
+    g->n_slots = 0;
+    g->airtime_total_ms = get32(p + 12);
+
+    for (uint32_t i = 0; i < n; i++) {
+        const uint8_t *e = p + STATE_HDR + (size_t)i * STATE_ENTRY;
+        int32_t age = (int32_t)get32(e);
+        uint32_t toa = get32(e + 4);
+
+        /*
+         * Age at export plus the time away. A negative age is a frame
+         * that had not finished leaving the antenna when the snapshot
+         * was taken, and the arithmetic handles that without a case of
+         * its own.
+         */
+        int64_t aged = (int64_t)age + (int64_t)away_ms;
+        if (aged >= (int64_t)LORAITP_DC_WINDOW_MS)
+            continue;                          /* aged out while away */
+
+        g->slot_end[g->n_slots] = (uint32_t)((int64_t)now - aged);
+        g->slot_toa[g->n_slots] = toa;
+        g->n_slots++;
+    }
+
+    uint32_t blocked = get32(p + 16);
+    g->blocked_until = (blocked > away_ms) ? now + (blocked - away_ms) : now;
+
+    /*
+     * Identification is deliberately not restored. An amateur station
+     * that has just rebooted should say who it is again, and the rule
+     * sets a floor on how often rather than a ceiling - so forgetting
+     * can only make the station more correct.
+     */
+    g->has_identified = false;
+    g->ident_pending = false;
+    return LORAITP_OK;
+}

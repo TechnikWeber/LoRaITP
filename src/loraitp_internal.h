@@ -18,6 +18,18 @@
 
 #define LORAITP_IDENT_INTERVAL_S 540u
 
+/*
+ * Layout of a duty-cycle snapshot (loraitp_gov_export). Here rather than
+ * in the .c file so the tests read the same numbers the encoder writes.
+ */
+#define STATE_MAGIC   0x5744434Cu      /* 'LCDW' */
+#define STATE_VERSION 1u
+#define STATE_HDR     20u
+#define STATE_ENTRY   8u
+#define STATE_TAIL    4u               /* the CRC */
+#define STATE_MAX_ENTRIES \
+    ((LORAITP_BUDGET_STATE_MAX - STATE_HDR - STATE_TAIL) / STATE_ENTRY)
+
 typedef struct {
     const char *name;
     uint32_t f_lo_hz, f_hi_hz;
@@ -75,6 +87,9 @@ int  loraitp_gov_init(loraitp_gov_t *g, const loraitp_session_cfg_t *cfg);
 uint32_t loraitp_gov_delay_ms(loraitp_gov_t *g, uint32_t now, uint32_t toa_ms);
 void loraitp_gov_record(loraitp_gov_t *g, uint32_t now, uint32_t toa_ms);
 uint32_t loraitp_gov_airtime_in_window(loraitp_gov_t *g, uint32_t now);
+int  loraitp_gov_export(loraitp_gov_t *g, uint32_t now, void *buf, size_t cap);
+int  loraitp_gov_import(loraitp_gov_t *g, uint32_t now, const void *buf,
+                        size_t len, uint32_t away_ms);
 bool loraitp_gov_ident_due(const loraitp_gov_t *g, uint32_t now);
 void loraitp_gov_ident_sent(loraitp_gov_t *g, uint32_t now);
 
