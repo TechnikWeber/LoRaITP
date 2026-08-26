@@ -32,10 +32,11 @@
 #endif
 
 /*
- * Amateur-service mode. Off unless deliberately enabled, so an ISM-only
- * product cannot reach it through a runtime misconfiguration.
+ * Amateur-service mode is a runtime profile, not a build option, and
+ * this flag never gated anything - SPEC.md 6.4 has the correction. An
+ * implementation that must not offer it removes the row from the table
+ * in loraitp_governor.c, which is a change a compiler can check.
  */
-/* #define LORAITP_ENABLE_AMATEUR 1 */
 
 /* Forward error correction. Required for broadcast (one-way) mode. */
 #ifndef LORAITP_ENABLE_FEC

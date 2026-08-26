@@ -160,9 +160,12 @@ configuration error.
 because the correct choice depends on licence class, country and band
 plan. The operator sets it deliberately, or the stack does not transmit.
 
-Amateur mode additionally requires the compile-time flag
-`LORAITP_ENABLE_AMATEUR`, so an ISM-only build cannot reach it through a
-runtime misconfiguration.
+This document previously said amateur mode additionally required the
+compile-time flag `LORAITP_ENABLE_AMATEUR`. It never did — nothing in
+the code has ever consulted that flag, and the claim is withdrawn in
+[SPEC.md 6.4](../SPEC.md) along with what actually holds instead. A
+build that must not offer amateur mode removes the row from the profile
+table.
 
 ## Testing without transmitting
 

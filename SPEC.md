@@ -535,9 +535,29 @@ imposes obligations that the ISM profiles do not have:
    frequency, because the correct one depends on the operator's licence
    class, country and band plan. The operator sets it explicitly.
 
-The mode is a runtime setting, but building it in requires the compile
-flag `LORAITP_ENABLE_AMATEUR`, so an ISM-only product cannot reach it
-by a misconfiguration.
+`AMATEUR` is a runtime setting, selected like any other profile.
+
+> **Correction.** Earlier drafts of this document said that building it
+> in required the compile flag `LORAITP_ENABLE_AMATEUR`, "so an ISM-only
+> product cannot reach it by a misconfiguration". No implementation ever
+> did this: the flag appears only as a commented-out line in
+> `loraitp_config.h`, and `loraitp_gov_init` has never consulted it. A
+> specification that promises a safety property nothing enforces is
+> worse than one that promises nothing, so the claim is withdrawn rather
+> than quietly kept.
+>
+> What does hold is weaker and worth stating exactly. A misconfiguration
+> cannot *silently* end up transmitting under amateur rules, because
+> `AMATEUR` without a call sign refuses to transmit at all — the failure
+> mode is a stack that will not start, not one operating unlawfully. But
+> anyone who selects the profile and types a call sign gets it, licensed
+> or not, and no software can tell the difference. Point 4 of §6.4 does
+> real work here: with no default frequency, the profile cannot be
+> stumbled into and left to transmit somewhere plausible.
+>
+> An implementation that must not offer amateur mode at all should
+> remove the row from its profile table. That is a build-time decision
+> in the ordinary sense, and it is the honest way to make one.
 
 > LoRaITP does not and cannot verify anyone's licence. The regulatory
 > profiles are engineering aids that make the compliant path the easy
