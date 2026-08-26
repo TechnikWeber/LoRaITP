@@ -20,6 +20,7 @@
 #include <LittleFS.h>
 #include <WebServer.h>
 #include <WiFi.h>
+#include <string.h>
 
 #include "debuglog.h"
 #include "webui.h"
@@ -411,6 +412,37 @@ static void opt(String &h, uint32_t value, const char *label, bool sel)
     h += ">"; h += label; h += "</option>";
 }
 
+/*
+ * Roughly how long one transfer takes at the current settings, in
+ * seconds, or 0 if there is nothing to base it on yet.
+ *
+ * Frames times time-on-air gives the airtime; the duty cycle turns that
+ * into wall clock, because on a 10% band nine tenths of the elapsed time
+ * is the governor waiting. Deliberately an estimate: the real figure
+ * depends on how well the picture compresses and on how many chunks have
+ * to be repeated. It is here so the interval field can be set with the
+ * transfer time in view rather than guessed at.
+ */
+static uint32_t transfer_estimate_s(void)
+{
+    if (g_status_cb == NULL)
+        return 0;
+    loraitp_webui_status_t st;
+    memset(&st, 0, sizeof(st));
+    g_status_cb(g_status_user, &st);
+    if (st.chunk_len == 0 || st.frame_toa_ms == 0)
+        return 0;
+
+    uint32_t bytes = g_cfg->image_budget ? g_cfg->image_budget : 8000u;
+    bytes += (uint32_t)bytes * g_cfg->parity_percent / 100u;
+    /* + META, + the block's NACK round trip. */
+    uint32_t frames = (bytes + st.chunk_len - 1) / st.chunk_len + 3u;
+    uint32_t airtime_ms = frames * st.frame_toa_ms;
+
+    return (st.duty_percent ? airtime_ms * 100u / st.duty_percent
+                            : airtime_ms) / 1000u;
+}
+
 static void h_settings_get(void)
 {
     touch();
@@ -498,11 +530,44 @@ static void h_settings_get(void)
          "what it buys: parity is a fraction of the image, but what it "
          "tolerates is r/(k+r) of the frames — so 25% survives 20% "
          "loss, not 25%.</small>";
-    h += "<label>Interval between transfers, seconds <input name=iv size=8 value=";
-    h += g_cfg->interval_s; h += "></label>";
-    h += "<small>Sender only. A receiver listens continuously — pausing it "
-         "between windows would make it deaf for part of every cycle, and "
-         "with no shared clock the gap would land wherever it liked.</small>";
+    /*
+     * Seconds are what gets stored, but nobody schedules a daily picture
+     * in seconds. The unit sits next to the number and is folded in on
+     * the way through, so the stored setting - and everything that reads
+     * it - stays exactly as it was. Coming back out, pick the largest
+     * unit the value divides into evenly: 21600 was typed as 6 hours and
+     * should still read as 6 hours.
+     */
+    uint32_t iv = g_cfg->interval_s, ivu = 1;
+    if (iv && iv % 3600u == 0)    ivu = 3600;
+    else if (iv && iv % 60u == 0) ivu = 60;
+    h += "<label>One transfer every <input name=iv size=6 value=";
+    h += iv / ivu;
+    h += "> <select name=ivu>";
+    opt(h, 1,    "seconds", ivu == 1);
+    opt(h, 60,   "minutes", ivu == 60);
+    opt(h, 3600, "hours",   ivu == 3600);
+    h += "</select></label>";
+    h += "<small>Sender only, and counted from the <em>start</em> of a "
+         "transfer, so six hours stays six hours however long the picture "
+         "takes. A receiver listens continuously — pausing it between "
+         "windows would make it deaf for part of every cycle, and with no "
+         "shared clock the gap would land wherever it liked. One picture a "
+         "day is 24 hours; a week is the most that can be set.</small>";
+
+    uint32_t est = transfer_estimate_s();
+    if (est) {
+        char e[192];
+        snprintf(e, sizeof(e),
+                 "<small>At these settings one transfer takes about "
+                 "<b>%lu min</b>. A shorter interval than that is not "
+                 "dangerous — a transfer always runs to the end before the "
+                 "next one is even considered, so two can never overlap — "
+                 "it simply means back-to-back transfers for as long as "
+                 "the airtime budget allows.</small>",
+                 (unsigned long)((est + 59u) / 60u));
+        h += e;
+    }
     h += "<label>Byte budget per image <input name=budget size=8 value=";
     h += g_cfg->image_budget; h += "></label>";
     h += "<label>Keep how many images <input name=keep size=6 value=";
@@ -554,7 +619,22 @@ static void h_settings_post(void)
         c.sync_word = (uint8_t)strtoul(g_server.arg("sync").c_str(), NULL, 16);
     if (g_server.hasArg("bcast"))  c.broadcast = g_server.arg("bcast").toInt() != 0;
     if (g_server.hasArg("parity")) c.parity_percent = (uint8_t)g_server.arg("parity").toInt();
-    if (g_server.hasArg("iv"))     c.interval_s = (uint32_t)g_server.arg("iv").toInt();
+    if (g_server.hasArg("iv")) {
+        uint32_t unit = g_server.hasArg("ivu")
+                        ? (uint32_t)g_server.arg("ivu").toInt() : 1u;
+        if (unit != 1u && unit != 60u && unit != 3600u)
+            unit = 1u;
+        uint32_t n = (uint32_t)g_server.arg("iv").toInt();
+        /*
+         * A week, and the ceiling is not arbitrary: the scheduler
+         * compares millis() values as a signed difference, which stops
+         * meaning anything once the wait passes 24 days. This is the one
+         * field a user can type an arbitrarily large number into, so it
+         * is where that gets caught.
+         */
+        if (n > 604800u / unit) n = 604800u / unit;
+        c.interval_s = n * unit;
+    }
     if (g_server.hasArg("budget")) c.image_budget = (uint16_t)g_server.arg("budget").toInt();
     if (g_server.hasArg("keep"))   c.keep_images = (uint16_t)g_server.arg("keep").toInt();
     if (g_server.hasArg("rfinv"))  c.rf_sw_invert = g_server.arg("rfinv").toInt() != 0;

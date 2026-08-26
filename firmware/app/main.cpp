@@ -446,10 +446,26 @@ void loop(void)
     }
 
     if (cfg.role == LORAITP_ROLE_SENDER) {
+        uint32_t started = millis();
         run_sender(ctx);
         publish_status();
-        next_run_ms = millis()
-                      + (cfg.interval_s ? cfg.interval_s * 1000u : 60000u);
+
+        /*
+         * The interval is a period, not a gap. A 10 kB picture at SF12 on
+         * a 10% band takes 72 minutes of wall clock, and measuring the
+         * wait from the end of that would turn "every six hours" into
+         * "every seven and a bit" - with the error accumulating, so a
+         * daily picture walks right around the clock over a month. Count
+         * from the moment the transfer started instead.
+         *
+         * If a transfer overran the period entirely, start the next one
+         * now rather than trying to catch up on a schedule the link has
+         * already shown it cannot keep.
+         */
+        uint32_t period_ms = cfg.interval_s ? cfg.interval_s * 1000u : 60000u;
+        next_run_ms = started + period_ms;
+        if ((int32_t)(millis() - next_run_ms) >= 0)
+            next_run_ms = millis();
         return;
     }
 

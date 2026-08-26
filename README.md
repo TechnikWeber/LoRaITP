@@ -171,6 +171,15 @@ while plugging the USB cable in.
    Sender, so you may not need to change anything.)
 4. Wait. Within a few minutes the receiver's gallery should show a
    picture.
+5. Once it works, set the schedule: **One transfer every _n_
+   seconds / minutes / hours** on the sender's settings page. It ships at
+   five minutes, which is right for a bench and wrong for a field —
+   *24 hours* is the one-picture-a-day case the airtime table above is
+   about. The period is counted from the start of a transfer, not the end
+   of it, so a picture that takes 72 minutes to send does not push the
+   next one back. The page also estimates how long one transfer takes at
+   your current settings, so the interval can be chosen with that number
+   in view.
 
 The boards start on **869.85 MHz at 5 mW** — the sub-band that has no
 airtime limit at all, so you can experiment as much as you like without
