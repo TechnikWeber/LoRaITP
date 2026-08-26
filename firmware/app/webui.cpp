@@ -482,6 +482,9 @@ static void h_settings_get(void)
 
     h += "<label>Frequency, Hz <input name=freq value=";
     h += g_cfg->frequency_hz; h += "></label>";
+    h += "<small>Clamped to what the radio can tune: 150–960 MHz. Whether "
+         "the region allows it is a separate question, and the governor "
+         "answers that one.</small>";
 
     h += "<label>Bandwidth <select name=bw>";
     opt(h, 20830,  "20.8 kHz — slowest, most range", g_cfg->bandwidth_hz == 20830);
@@ -511,6 +514,10 @@ static void h_settings_get(void)
 
     h += "<label>TX power, dBm <input name=pwr size=4 value=";
     h += g_cfg->tx_power_dbm; h += "></label>";
+    h += "<small>The SX1262 gives at most <b>22 dBm</b> at the module, and "
+         "values outside -9..22 are clamped here. EU868_G3 permits 500 mW "
+         "(27 dBm) <i>ERP</i> — that is 22 dBm plus antenna gain, not a "
+         "larger number in this box.</small>";
     h += "<label>Sync word (hex) <input name=sync size=4 value=";
     char sw[8]; snprintf(sw, sizeof(sw), "%02X", g_cfg->sync_word); h += sw;
     h += "></label>";
@@ -626,11 +633,28 @@ static void h_settings_post(void)
     if (g_server.hasArg("apoff"))  c.ap_auto_off = g_server.arg("apoff").toInt() != 0;
     if (g_server.hasArg("apto"))   c.ap_timeout_s = (uint16_t)g_server.arg("apto").toInt();
     if (g_server.hasArg("region")) c.region = (uint8_t)g_server.arg("region").toInt();
-    if (g_server.hasArg("freq"))   c.frequency_hz = (uint32_t)g_server.arg("freq").toInt();
+    /*
+     * Clamped, not merely validated. These two are free-text fields
+     * feeding a radio driver that is brought up before the web server
+     * is, so a value it rejects used to cost a USB cable to undo. The
+     * firmware no longer dies on that, but a setting that cannot work
+     * has no business being stored either.
+     */
+    if (g_server.hasArg("freq")) {
+        uint32_t f = (uint32_t)g_server.arg("freq").toInt();
+        if (f < 150000000u) f = 150000000u;
+        if (f > 960000000u) f = 960000000u;
+        c.frequency_hz = f;
+    }
     if (g_server.hasArg("bw"))     c.bandwidth_hz = (uint32_t)g_server.arg("bw").toInt();
     if (g_server.hasArg("cr"))     c.coding_rate = (uint8_t)g_server.arg("cr").toInt();
     if (g_server.hasArg("sf"))     c.spreading_factor = (uint8_t)g_server.arg("sf").toInt();
-    if (g_server.hasArg("pwr"))    c.tx_power_dbm = (int8_t)g_server.arg("pwr").toInt();
+    if (g_server.hasArg("pwr")) {
+        long p = g_server.arg("pwr").toInt();
+        if (p < -9)  p = -9;      /* the SX1262's range, and RadioLib */
+        if (p > 22)  p = 22;      /* refuses anything outside it */
+        c.tx_power_dbm = (int8_t)p;
+    }
     if (g_server.hasArg("sync"))
         c.sync_word = (uint8_t)strtoul(g_server.arg("sync").c_str(), NULL, 16);
     if (g_server.hasArg("bcast"))  c.broadcast = g_server.arg("bcast").toInt() != 0;

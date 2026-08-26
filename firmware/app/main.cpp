@@ -354,14 +354,38 @@ void setup(void)
             cfg.rf_sw_invert ? "receive (inverted)" : "transmit");
     }
 
-    rc = loraitp_radiolib_attach(&port, &r);
-    if (rc != LORAITP_OK)
-        die("radio attach", rc);
+    /*
+     * A refusal here is not fatal, and it took a near miss to see why.
+     *
+     * Everything in that configuration comes from the settings page, and
+     * the settings page is the only way to undo it. die() would take the
+     * access point down with it, so a value the radio will not accept -
+     * 27 dBm, say, which is what EU868_G3's 500 mW ERP limit invites
+     * somebody to type, while the SX1262 stops at 22 - would leave no
+     * way back in that does not involve a USB cable and a board off its
+     * mast. The recovery mechanism has to outlive the thing it recovers
+     * from.
+     *
+     * So the page comes up, says what the radio refused, and lets it be
+     * corrected. This is the same shape as the governor refusal below;
+     * the two behave alike now because they are the same kind of
+     * mistake.
+     */
+    bool radio_up = (loraitp_radiolib_attach(&port, &r) == LORAITP_OK);
     loraitp_store_attach(&port, store);
-    LOG("radio up: %.3f MHz SF%u BW%lu CR4/%u %d dBm sync %02X",
-        (double)r.frequency_mhz, r.spreading_factor,
-        (unsigned long)cfg.bandwidth_hz / 1000u, cfg.coding_rate + 4,
-        r.tx_power_dbm, cfg.sync_word);
+    if (radio_up) {
+        LOG("radio up: %.3f MHz SF%u BW%lu CR4/%u %d dBm sync %02X",
+            (double)r.frequency_mhz, r.spreading_factor,
+            (unsigned long)cfg.bandwidth_hz / 1000u, cfg.coding_rate + 4,
+            r.tx_power_dbm, cfg.sync_word);
+    } else {
+        snprintf(last_result, sizeof(last_result),
+                 "radio refused this configuration (RadioLib %d)",
+                 loraitp_radiolib_last_error());
+        LOG("%s - check frequency, bandwidth, spreading factor and TX "
+            "power; the SX1262 accepts -9 to 22 dBm and 150-960 MHz",
+            last_result);
+    }
 
     if (cfg.role == LORAITP_ROLE_SENDER && LORAITP_BOARD.has_camera) {
         if (loraitp_camera_init()) {
@@ -384,16 +408,19 @@ void setup(void)
 
     loraitp_session_cfg_t s;
     configure_session(&s);
-    rc = loraitp_init(ctx, &port, &s);
+    rc = radio_up ? loraitp_init(ctx, &port, &s) : LORAITP_E_RADIO;
     if (rc != LORAITP_OK) {
         /* A regulatory refusal lands here: amateur mode without a call
          * sign, a frequency outside the region, power above its ERP
          * limit. Refusing is the intended behaviour, so keep the access
          * point up and say why rather than dying silently. */
         ctx = NULL;
-        snprintf(last_result, sizeof(last_result),
-                 "refused by the duty-cycle governor (error %d)", rc);
-        LOG("%s - check region, frequency, power and call sign", last_result);
+        if (radio_up) {
+            snprintf(last_result, sizeof(last_result),
+                     "refused by the duty-cycle governor (error %d)", rc);
+            LOG("%s - check region, frequency, power and call sign",
+                last_result);
+        }
     } else {
         /* Before anything transmits: what this board already owes from
          * before the reboot. */
