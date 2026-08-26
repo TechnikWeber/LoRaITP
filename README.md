@@ -14,7 +14,7 @@ gateway. A sender and a receiver that agree on a frequency are enough.
 > **Status: everything builds and passes; nothing has been on the air.**
 > The specification is complete and every number in it is computed rather
 > than estimated. A Python reference implementation runs full transfers
-> against a simulated channel, a portable C core passes 101 checks against
+> against a simulated channel, a portable C core passes 109 checks against
 > vectors generated from it, and the firmware builds for all three ESP32
 > targets — 44 % of flash, 40 % of RAM on the tightest of them. The next
 > step is two boards on a desk. See [the roadmap](#roadmap).
@@ -320,7 +320,7 @@ height and a clear line of sight, not on a bigger amplifier.
 $ python3 sim/selftest.py     # 68 checks: crypto vectors, erasure coding,
                               # governor rules, feasibility property tests
 $ python3 sim/run.py          # 12 full transfers against simulated loss
-$ cd tests && make run        # 101 checks on the C core
+$ cd tests && make run        # 109 checks on the C core
 $ cd tests && make san        # the same, under ASan and UBSan
 $ cd tests && make port       # 24 checks on the RadioLib adapter
 $ cd tests && make store      # 37 checks on the image store, real files
@@ -376,7 +376,7 @@ likeliest place, not the protocol.
 - [x] Repository skeleton and the core/port boundary
 - [x] Python reference implementation and channel simulator — 68 checks,
       12 transfer scenarios, no hardware
-- [x] Portable C core — 101 checks, warning-free, sanitizer-clean,
+- [x] Portable C core — 109 checks, warning-free, sanitizer-clean,
       3.9 kB of context and no allocation
 - [x] `port_radiolib.cpp` and pin maps — one adapter for all four boards,
       19 contract checks against a mocked RadioLib

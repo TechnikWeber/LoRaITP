@@ -17,7 +17,7 @@ whatever speed you like.
 
 ## Status
 
-Built and tested. 101 checks pass on the host under
+Built and tested. 109 checks pass on the host under
 `-Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion` with no
 warnings, and clean under AddressSanitizer and UBSan:
 
