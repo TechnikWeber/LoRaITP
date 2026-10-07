@@ -442,9 +442,9 @@ well-understood ideas.
 The specification is a draft and comments on it are more valuable right
 now than code. Open an issue.
 
-## Licence
+## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE).
 
 ## Disclaimer
 
