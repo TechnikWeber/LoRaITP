@@ -1,5 +1,3 @@
-**English** · [Deutsch](README.de.md)
-
 # LoRaITP — LoRa Image Transfer Protocol
 
 **Send a photograph 30 kilometres, once a day, on a battery — legally.**
