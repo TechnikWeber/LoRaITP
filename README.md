@@ -163,6 +163,8 @@ Open **[the flasher page](https://technikweber.github.io/LoRaITP/flash/)**
 in Chrome, Edge or Opera, plug the board in over USB, pick your board,
 click Install. That is the whole procedure — no software to install.
 
+<img src="docs/flasher.png" width="500" alt="The flasher page lists the supported boards, each with a Connect button">
+
 Firefox and Safari cannot do this: flashing over USB needs an API they
 have both declined to implement. There is nothing to enable, you need a
 different browser.
