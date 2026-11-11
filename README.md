@@ -2,10 +2,19 @@
 
 <p>
   <img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-orange">
-  <a href="https://github.com/TechnikWeber/LoRaITP/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/TechnikWeber/LoRaITP?include_prereleases&label=release"></a>
+  <a href="https://github.com/TechnikWeber/LoRaITP/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/TechnikWeber/LoRaITP?include_prereleases&label=download&color=2ea44f"></a>
+  <a href="https://github.com/TechnikWeber/LoRaITP/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/TechnikWeber/LoRaITP/total?color=blue"></a>
+  <a href="https://github.com/TechnikWeber/LoRaITP/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/TechnikWeber/LoRaITP?style=flat&color=yellow"></a>
   <a href="https://github.com/TechnikWeber/LoRaITP/actions/workflows/ci.yml"><img alt="tests" src="https://img.shields.io/github/actions/workflow/status/TechnikWeber/LoRaITP/ci.yml?branch=main&label=tests"></a>
   <img alt="Platform: ESP32-S3 (Heltec V3)" src="https://img.shields.io/badge/platform-ESP32--S3%20%28Heltec%20V3%29-blue">
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green"></a>
+</p>
+
+<p>
+  <a href="https://technikweber.github.io/LoRaITP/flash/"><b>Flash from the browser</b></a> &nbsp;·&nbsp;
+  <a href="docs/bench-loopback.md"><b>Bench test</b></a> &nbsp;·&nbsp;
+  <a href="#roadmap"><b>Roadmap</b></a> &nbsp;·&nbsp;
+  <a href="https://github.com/TechnikWeber/LoRaITP/releases"><b>Releases</b></a>
 </p>
 
 **Send a photograph 30 kilometres, once a day, on a battery — legally.**
