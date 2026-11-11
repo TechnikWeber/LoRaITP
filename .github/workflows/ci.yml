@@ -8,8 +8,8 @@ jobs:
   host:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - run: pip install pillow
 
@@ -66,14 +66,14 @@ jobs:
         # filesystem the part does not have. See firmware/platformio.ini.
         env: [heltec_v3, heltec_v4, xiao_esp32s3_sense, xiao_esp32s3_kit]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with: { python-version: "3.12" }
       - run: pip install platformio
       - name: build ${{ matrix.env }}
         working-directory: firmware
         run: pio run -e ${{ matrix.env }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: firmware-${{ matrix.env }}
           path: firmware/.pio/build/${{ matrix.env }}/*.bin
