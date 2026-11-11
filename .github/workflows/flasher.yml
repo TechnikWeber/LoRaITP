@@ -46,6 +46,26 @@ jobs:
           done
           sed -i "s|the main branch|${GITHUB_SHA::7}|" docs/flash/index.html
 
+      # One merged image per board for flashing without the web page (Firefox, offline:
+      # esptool write-flash 0x0 <file>). The offsets come from the flasher manifests,
+      # which tools/check_flash_manifest.py has just checked against the partition tables.
+      - name: merged images for the release
+        run: |
+          pip install "esptool>=4.8,<6"
+          v=${GITHUB_REF_NAME#v}
+          [ "$GITHUB_REF_TYPE" = tag ] || v=${GITHUB_SHA::7}
+          mkdir -p release
+          for e in heltec_v3 heltec_v4 xiao_esp32s3_sense xiao_esp32s3_kit; do
+            args=$(python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(" ".join(f"{hex(p["offset"])} docs/flash/{p["path"]}" for p in m["builds"][0]["parts"]))' "docs/flash/manifest-$e.json")
+            python3 -m esptool --chip esp32s3 merge_bin -o "release/loraitp-$v-$e.bin" $args
+          done
+          cd release && sha256sum *.bin > SHA256SUMS && cat SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loraitp-firmware
+          path: release/*
+
       - uses: actions/upload-pages-artifact@v3
         with: { path: docs }
 
@@ -58,3 +78,22 @@ jobs:
     steps:
       - uses: actions/deploy-pages@v4
         id: deploy
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: loraitp-firmware, path: release }
+      - name: attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" \
+              --notes "Flash from the browser: https://technikweber.github.io/LoRaITP/flash/ — or, without it: esptool write-flash 0x0 loraitp-<version>-<board>.bin" \
+              $([[ "$GITHUB_REF_NAME" == *-* ]] && echo --prerelease)
+          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" release/* --clobber

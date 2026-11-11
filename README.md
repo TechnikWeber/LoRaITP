@@ -172,6 +172,15 @@ different browser.
 If the board does not appear in the list of ports, hold its BOOT button
 while plugging the USB cable in.
 
+**Without the browser** (Firefox, offline): every
+[release](https://github.com/TechnikWeber/LoRaITP/releases) carries one
+merged image per board and a `SHA256SUMS`. Flash it at address 0:
+
+```sh
+pip install esptool
+esptool --chip esp32s3 write-flash 0x0 loraitp-<version>-heltec_v3.bin
+```
+
 ### First run
 
 > Doing this for the first time, with two boards that have never
